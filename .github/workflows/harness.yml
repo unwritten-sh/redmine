@@ -1,0 +1,35 @@
+name: Harness
+
+# Runs the same gates that agents run locally (bin/harness setup, check-fast,
+# check) through `uw-harness verify`, which also checks that AGENTS.md matches
+# the repository. tests.yml and linters.yml (upstream) are unchanged.
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install SCM binaries for the repository tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --quiet subversion mercurial
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '4.0'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Verify the harness gates
+        run: npx -y uw-harness verify

@@ -1,0 +1,45 @@
+# Optional data stores for local development and tests.
+# The default setup (bin/harness setup) uses SQLite3 and needs none of these.
+# They mirror the services of .github/workflows/tests.yml. To use one, start it
+# and write config/database.yml by hand (examples in config/database.yml.example):
+#
+#   docker compose up -d postgres   # adapter: postgresql, host: 127.0.0.1, username: root, password: root
+#   docker compose up -d mysql      # adapter: mysql2,     host: 127.0.0.1, username: root, password: root
+#
+# Then run bin/harness setup again: the Gemfile installs the adapter gem it
+# finds in config/database.yml.
+services:
+  postgres:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: redmine_test
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: redmine_test
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+volumes:
+  postgres-data:
+  mysql-data:

@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# Harness entry point: picks a supported Ruby, then runs a Rake task of the
+# Rakefile (help, setup, dev, test, lint, check-fast, check, ...).
+#
+#   bin/harness            # same as bin/harness help
+#   bin/harness setup      # writes config/database.yml (SQLite3) if missing,
+#                          # installs gems and Node packages, prepares the databases
+#   bin/harness check-fast # RuboCop + unit and helper tests
+#   bin/harness check      # everything the harness CI runs
+#
+# The Rakefile loads Rails, so `bundle exec rake` only works after gems are
+# installed. `setup` does that bootstrap first, then calls `rake setup`.
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+ruby_ok() {
+  command -v ruby >/dev/null 2>&1 &&
+    ruby -e 'v = Gem::Version.new(RUBY_VERSION); exit(v >= Gem::Version.new("3.3") && v < Gem::Version.new("4.1") ? 0 : 1)' 2>/dev/null
+}
+
+# The Gemfile needs Ruby >= 3.3 and < 4.1. macOS ships Ruby 2.6 in /usr/bin,
+# so fall back to a Homebrew Ruby when the Ruby on PATH is too old.
+if ! ruby_ok; then
+  for dir in /opt/homebrew/opt/ruby/bin /usr/local/opt/ruby/bin; do
+    if [ -x "$dir/ruby" ]; then
+      PATH="$dir:$PATH"
+      gem_bin="$("$dir/ruby" -e 'print Gem.bindir')"
+      PATH="$gem_bin:$PATH"
+      export PATH
+      break
+    fi
+  done
+fi
+if ! ruby_ok; then
+  echo "bin/harness: Ruby >= 3.3 and < 4.1 is required (see .tool-versions)." >&2
+  exit 1
+fi
+
+task="${1:-help}"
+[ $# -gt 0 ] && shift
+
+if [ "$task" = "setup" ]; then
+  if [ ! -f config/database.yml ]; then
+    echo "==> Writing config/database.yml (SQLite3, development and test)"
+    cat > config/database.yml <<'EOF'
+# Written by bin/harness setup. Git ignores this file.
+# For MySQL or PostgreSQL, see config/database.yml.example and compose.yaml.
+development:
+  adapter: sqlite3
+  database: db/redmine_development.sqlite3
+
+test:
+  adapter: sqlite3
+  database: db/redmine_test.sqlite3
+EOF
+  fi
+  echo "==> bundle install"
+  bundle install
+  if command -v yarn >/dev/null 2>&1; then
+    echo "==> yarn install (Stylelint)"
+    yarn install
+  elif command -v npm >/dev/null 2>&1; then
+    echo "==> npm install (Stylelint)"
+    npm install --no-save
+  else
+    echo "bin/harness: Node.js not found, Stylelint will not run (see .tool-versions)." >&2
+  fi
+fi
+
+exec bundle exec rake "$task" "$@"
