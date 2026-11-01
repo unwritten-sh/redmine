@@ -1,0 +1,330 @@
+{
+  "slug": "redmine",
+  "upstream": "https://github.com/redmine/redmine",
+  "base_sha": "60e3910f01facf1732b8df4195a77623bf2c6ffa",
+  "agent": "claude 2.1.316 (Claude Code)",
+  "uw_harness": {
+    "version": "0.3.0",
+    "at_start": "491cab02495d9212aa88c2687df215e470d6092f",
+    "notes": "finished_at 2026-11-01T16:16:10Z\nuw_harness_sha_at_end 491cab02495d9212aa88c2687df215e470d6092f"
+  },
+  "branches": {
+    "harness": "uw-harness/20261101-1652",
+    "prove": "uw-harness/prove-20261101-1708"
+  },
+  "facts": {
+    "commits": 19938,
+    "first_commit": "2006-06-28",
+    "files": 2289,
+    "languages": [
+      {
+        "name": "Ruby",
+        "files": 1137
+      },
+      {
+        "name": "JavaScript",
+        "files": 82
+      },
+      {
+        "name": "Python",
+        "files": 1
+      }
+    ]
+  },
+  "score": {
+    "before": 19,
+    "after": 92,
+    "final": 92
+  },
+  "level": {
+    "before": 0,
+    "after": 2,
+    "final": 2
+  },
+  "requirements": {
+    "before": {
+      "pass": 3,
+      "partial": 1,
+      "fail": 15
+    },
+    "after": {
+      "pass": 16,
+      "partial": 3,
+      "fail": 0
+    },
+    "final": {
+      "pass": 16,
+      "partial": 3,
+      "fail": 0
+    }
+  },
+  "not_passing_final": [
+    {
+      "id": "env-example",
+      "status": "partial",
+      "evidence": [
+        ".env.example exists, but 1 file holds secret-looking values: db/migrate/001_setup.rb (password or secret)"
+      ]
+    },
+    {
+      "id": "deploy-explicit",
+      "status": "partial",
+      "evidence": [
+        "docs/deploy.md has open questions for a human"
+      ]
+    },
+    {
+      "id": "observability",
+      "status": "partial",
+      "evidence": [
+        "docs/observability.md has open questions for a human"
+      ]
+    }
+  ],
+  "run_minutes": 16.3,
+  "baseline_in_run": {
+    "command": "bin/rails test",
+    "ok": false,
+    "tests": null,
+    "note": "ran no test (exit 1)"
+  },
+  "baseline_measured_later": {
+    "command": "bin/rails test",
+    "ok": true,
+    "tests": {
+      "ran": 6064,
+      "skipped": 64,
+      "failed": 0
+    },
+    "note": null,
+    "measured_at": "2026-11-01T17:25:00Z",
+    "how": "baseline-manual.sh: base commit, Homebrew Ruby 4.0.0 on PATH (the Ruby bin/harness picks), Gemfile.lock, config/database.yml and the SQLite test databases copied from the setup gate. The system Ruby 2.6 cannot run it: the run measured nothing."
+  },
+  "gates": {
+    "setup": "bin/harness setup",
+    "fast": "bin/harness check-fast",
+    "full": "bin/harness check"
+  },
+  "verified": {
+    "setup": {
+      "command": "bin/harness setup",
+      "ok": true,
+      "at": "2026-11-01T16:06:43.339Z",
+      "commit": "60e3910f0",
+      "tests": null,
+      "fingerprint": "a1f9186192e2e57c"
+    },
+    "fast": {
+      "command": "bin/harness check-fast",
+      "ok": true,
+      "at": "2026-11-01T16:06:43.339Z",
+      "commit": "60e3910f0",
+      "tests": {
+        "ran": 3383,
+        "skipped": 92,
+        "failed": 0
+      },
+      "fingerprint": "a1f9186192e2e57c"
+    },
+    "full": {
+      "command": "bin/harness check",
+      "ok": true,
+      "at": "2026-11-01T16:06:43.339Z",
+      "commit": "60e3910f0",
+      "tests": {
+        "ran": 6297,
+        "skipped": 131,
+        "failed": 0
+      },
+      "fingerprint": "a1f9186192e2e57c"
+    }
+  },
+  "findings": {
+    "skipped_test_files": [],
+    "relaxed_checks": [],
+    "review_commit": [
+      {
+        "path": "Rakefile",
+        "reason": "changed existing application code"
+      }
+    ],
+    "secrets_added": [],
+    "secrets_in_repo": [
+      {
+        "file": "db/migrate/001_setup.rb",
+        "kind": "password or secret"
+      },
+      {
+        "file": "test/functional/account_controller_test.rb",
+        "kind": "password or secret"
+      },
+      {
+        "file": "test/integration/sessions_test.rb",
+        "kind": "password or secret"
+      },
+      {
+        "file": "test/unit/lib/redmine/ciphering_test.rb",
+        "kind": "password or secret"
+      }
+    ],
+    "trivial_test_files": [
+      "extra/sample_plugin/test/integration/routing_test.rb",
+      "test/helpers/activities_helper_test.rb",
+      "test/system/quick_jump_test.rb",
+      "test/system/responsive_menu_test.rb",
+      "test/unit/lib/redmine/notifiable_test.rb",
+      "test/unit/lib/redmine/wiki_formatting/textile_html_parser_test.rb"
+    ],
+    "coverage_problems": [],
+    "blocked": [
+      {
+        "requirement": "local-env",
+        "reason": "On a new SQLite3 database, bin/rails db:prepare fails every time at db/migrate/072_add_enumerations_position.rb (no such column: enumerations.position). The migration skips add_column when Enumeration.column_names already lists the column. bin/harness setup uses db:create db:migrate instead, which passes every time. The migration was not changed: a human should decide whether to fix it upstream."
+      },
+      {
+        "requirement": "env-example",
+        "reason": "uw-harness flags db/migrate/001_setup.rb as a secret-looking value. It is the SHA1 hash of the default admin password 'admin', which doc/INSTALL documents and which Redmine forces users to change at first login. It is not a real secret, and the migration may not be changed, so this check stays partial."
+      },
+      {
+        "requirement": "full-gate",
+        "reason": "Left out of bin/harness check: system tests (bin/harness test-system, need Chrome and a Mermaid.js download), the Bazaar non-ASCII test (needs the en_US.ISO8859-1 locale), bundle audit (needs network), and the PostgreSQL/MySQL and Ruby 3.3/3.4 matrix. The upstream workflows tests.yml and linters.yml still run all of them."
+      },
+      {
+        "requirement": "ci",
+        "reason": "The uw-harness package is not published on npm (npx -y uw-harness returned 404 here), so the new harness.yml workflow will fail until it is published. The gates were checked with the local build of uw-harness (check passes) and run directly from a clean shell."
+      },
+      {
+        "requirement": "deploy-explicit",
+        "reason": "Without human answers, docs/deploy.md and docs/observability.md keep open TODO blocks, so these two checks stay partial."
+      }
+    ]
+  },
+  "open_questions": [
+    {
+      "file": "docs/deploy.md",
+      "requirement": "deploy-explicit",
+      "question": "Is this copy of Redmine deployed anywhere by your team (which server, which environments), or is it only a mirror of upstream used for development?"
+    },
+    {
+      "file": "docs/deploy.md",
+      "requirement": "deploy-explicit",
+      "question": "If this copy is deployed: who can deploy, how is a release built for it (git tag, archive, branch), and how do you roll back a release that ran database migrations?"
+    },
+    {
+      "file": "docs/observability.md",
+      "requirement": "observability",
+      "question": "Where do production logs go (log/production.log, STDOUT to a collector?), and is there any error tracker, dashboard or alert channel for this instance?"
+    },
+    {
+      "file": "docs/agreements/working-agreements.md",
+      "requirement": "agreements",
+      "question": "Should changes from agents follow the upstream process (a patch attached to an issue on www.redmine.org, commit message ending with (#issue)) or a local branch and pull request process in this repository?"
+    },
+    {
+      "file": "docs/agreements/working-agreements.md",
+      "requirement": "ci",
+      "question": "May the new workflow .github/workflows/harness.yml run on pull requests in this repository, given that upstream development happens in Subversion on www.redmine.org and GitHub pull requests are not reviewed there?"
+    },
+    {
+      "file": "docs/local-dev.md",
+      "requirement": "fast-gate",
+      "question": "Is it acceptable that the fast gate skips the SCM, LDAP and system (Chrome) tests that need external binaries or services?"
+    },
+    {
+      "file": "docs/local-dev.md",
+      "requirement": "local-env",
+      "question": "Which database should be the default for local development and the gates: SQLite3 (the current default of bin/harness setup) or PostgreSQL/MySQL in Docker?"
+    }
+  ],
+  "files_added_or_changed": 24,
+  "proof": {
+    "task": {
+      "title": "Add a test for the /up health check route",
+      "description": "config/routes.rb exposes GET /up (rails/health#show) for load balancers and uptime monitors, but no test in test/ covers it. Add a routing test and an integration test, so that a change to the routes or to authentication filters cannot break the health check without a failing test.",
+      "acceptance": [
+        "A new routing assertion (for example in test/integration/routing/) checks that GET /up routes to rails/health#show.",
+        "A new integration test checks that an anonymous GET /up returns 200, also when the setting 'login_required' is enabled.",
+        "Only files under test/ change, `bin/harness check-fast` and `bin/harness check` pass, and a dated entry is added to docs/harness/log.md."
+      ]
+    },
+    "status": "done",
+    "gates_ok": true,
+    "fix_rounds": 0,
+    "tests_before": {
+      "ran": 6297,
+      "skipped": 131,
+      "failed": 0
+    },
+    "tests_after": {
+      "ran": 6300,
+      "skipped": 131,
+      "failed": 0
+    },
+    "failed_before": [],
+    "acceptance_met": 3,
+    "acceptance_requested": 3,
+    "human_needed": [],
+    "harness_gaps": [
+      {
+        "file": "AGENTS.md",
+        "problem": "AGENTS.md and the implement-change skill say to run one test with `bin/rails test <file>`. On macOS this uses the first Ruby on PATH, which is the system Ruby 2.6, and it fails with a missing-bundler error. Only bin/harness picks a supported Ruby. The docs should say to put /opt/homebrew/opt/ruby/bin on PATH first (or use .tool-versions with a version manager), or bin/harness should offer a task that runs a single test."
+      },
+      {
+        "file": "AGENTS.md",
+        "problem": "The task's criterion 'only files under test/ change' conflicts with the rule in AGENTS.md to add a docs/harness/log.md entry for each change. Nothing tells the agent which rule wins. I followed both and treated the log file as the allowed exception."
+      },
+      {
+        "file": "test/test_helper.rb",
+        "problem": "Nothing in the harness docs lists the test base classes (Redmine::RoutingTest, Redmine::IntegrationTest) or the with_settings helper. I had to read test_helper.rb and existing tests to find them. A short section in docs/local-dev.md or the implement-change skill would help."
+      }
+    ],
+    "relaxed_checks": [],
+    "skipped_test_files": [],
+    "duration_s": 318,
+    "prove_minutes": 5.8
+  },
+  "control": {
+    "status": "partial",
+    "criteria_met": 2,
+    "criteria_requested": 3,
+    "unmet": [
+      "Only files under test/ change, bin/harness check-fast and bin/harness check pass, and a dated entry is added to docs/harness/log.md."
+    ],
+    "human_needed": [
+      {
+        "question": "This worktree (control-tree, HEAD 60e3910f0) has no bin/harness, docs/harness/log.md or .claude/skills. Should the harness files be added to this tree, or should I create docs/harness/log.md here even though the task says only files under test/ should change?",
+        "why": "The third acceptance criterion depends on files that are missing here. Creating a new docs/ tree is a decision about the repository layout. I should not make that decision alone, and it would also break the 'only test/ changes' rule."
+      }
+    ],
+    "duration_s": 109,
+    "files_changed": [
+      "test/integration/health_test.rb",
+      "test/integration/routing/health_test.rb"
+    ],
+    "own_tests": {
+      "command": "bin/rails test",
+      "ok": false,
+      "tests": null,
+      "note": "ran no test (exit 1)"
+    },
+    "own_tests_measured_later": {
+      "command": "bin/rails test",
+      "ok": true,
+      "tests": {
+        "ran": 6067,
+        "skipped": 64,
+        "failed": 0
+      },
+      "note": null,
+      "how": "own-tests-manual.sh: same as baseline-manual.sh, with control/control.diff applied."
+    },
+    "harness_gates": {
+      "ok": true,
+      "tests": {
+        "ran": 6300,
+        "skipped": 131,
+        "failed": 0
+      }
+    }
+  }
+}

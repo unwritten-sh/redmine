@@ -1,0 +1,74 @@
+diff --git a/test/integration/health_test.rb b/test/integration/health_test.rb
+new file mode 100644
+index 000000000..538d8658a
+--- /dev/null
++++ b/test/integration/health_test.rb
+@@ -0,0 +1,36 @@
++# frozen_string_literal: true
++
++# Redmine - project management software
++# Copyright (C) 2006-  Jean-Philippe Lang
++#
++# This program is free software; you can redistribute it and/or
++# modify it under the terms of the GNU General Public License
++# as published by the Free Software Foundation; either version 2
++# of the License, or (at your option) any later version.
++#
++# This program is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU General Public License for more details.
++#
++# You should have received a copy of the GNU General Public License
++# along with this program; if not, write to the Free Software
++# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
++
++require_relative '../test_helper'
++
++class HealthTest < Redmine::IntegrationTest
++  def test_anonymous_health_check_should_succeed
++    with_settings :login_required => '0' do
++      get '/up'
++      assert_response :success
++    end
++  end
++
++  def test_anonymous_health_check_should_succeed_when_login_is_required
++    with_settings :login_required => '1' do
++      get '/up'
++      assert_response :success
++    end
++  end
++end
+diff --git a/test/integration/routing/health_test.rb b/test/integration/routing/health_test.rb
+new file mode 100644
+index 000000000..ed11a9a45
+--- /dev/null
++++ b/test/integration/routing/health_test.rb
+@@ -0,0 +1,26 @@
++# frozen_string_literal: true
++
++# Redmine - project management software
++# Copyright (C) 2006-  Jean-Philippe Lang
++#
++# This program is free software; you can redistribute it and/or
++# modify it under the terms of the GNU General Public License
++# as published by the Free Software Foundation; either version 2
++# of the License, or (at your option) any later version.
++#
++# This program is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU General Public License for more details.
++#
++# You should have received a copy of the GNU General Public License
++# along with this program; if not, write to the Free Software
++# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
++
++require_relative '../../test_helper'
++
++class RoutingHealthTest < Redmine::RoutingTest
++  def test_health_check
++    should_route 'GET /up' => 'rails/health#show'
++  end
++end

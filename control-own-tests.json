@@ -1,0 +1,7 @@
+{
+  "command": "bin/rails test",
+  "ok": true,
+  "tests": { "ran": 6067, "skipped": 64, "failed": 0 },
+  "note": null,
+  "how": "own-tests-manual.sh: same as baseline-manual.sh, with control/control.diff applied."
+}

@@ -1,0 +1,4 @@
+== run
+run exit 1
+scripts/case-study/run-case.sh: line 31: syntax error near unexpected token `)'
+scripts/case-study/run-case.sh: line 31: `-u +%Y-%m-%dT%H:%M:%SZ)",'

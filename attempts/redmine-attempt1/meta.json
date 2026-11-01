@@ -1,0 +1,11 @@
+{
+  "slug": "redmine",
+  "upstream": "https://github.com/redmine/redmine",
+  "base_sha": "60e3910f01facf1732b8df4195a77623bf2c6ffa",
+  "base_branch": "master",
+  "started_at": "2026-11-01T15:12:57Z",
+  "uw_harness_sha": "d53d7a2bd456e654809a50c0a21949a9aaf388cf",
+  "uw_harness_version": "0.3.0",
+  "agent": "claude",
+  "agent_version": "2.1.316 (Claude Code)"
+}

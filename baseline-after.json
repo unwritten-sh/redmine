@@ -1,0 +1,8 @@
+{
+  "command": "bin/rails test",
+  "ok": true,
+  "tests": { "ran": 6064, "skipped": 64, "failed": 0 },
+  "note": null,
+  "measured_at": "2026-11-01T17:25:00Z",
+  "how": "baseline-manual.sh: base commit, Homebrew Ruby 4.0.0 on PATH (the Ruby bin/harness picks), Gemfile.lock, config/database.yml and the SQLite test databases copied from the setup gate. The system Ruby 2.6 cannot run it: the run measured nothing."
+}
