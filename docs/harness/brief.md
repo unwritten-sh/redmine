@@ -11,7 +11,7 @@ Harness coverage went from 19 to 92 out of 100, level 0 to 2 (self-checking). Th
 | Gate | Command | Result | Tests |
 | --- | --- | --- | --- |
 | fast | `bin/harness check-fast` | pass | 3383 tests, 92 skipped |
-| full | `bin/harness check` | pass | 6297 tests, 131 skipped |
+| full | `bin/harness check` | pass | 6300 tests, 131 skipped |
 
 Before the harness, the project's tests could not be measured: `bin/rails test` ran no test (exit 1). This says nothing about whether the tests pass, and the gates could not be compared with a starting point.
 6 test files only compare literals (for example `assert True`) and protect nothing: `extra/sample_plugin/test/integration/routing_test.rb`, `test/helpers/activities_helper_test.rb`, `test/system/quick_jump_test.rb`, `test/system/responsive_menu_test.rb`, `test/unit/lib/redmine/notifiable_test.rb`.
@@ -53,6 +53,24 @@ config/routes.rb exposes GET /up (rails/health#show) for load balancers and upti
 
 Run it with `npx uw-harness prove`: an agent does the task with the harness, on its own branch, and the result is added to this page.
 
+## Pilot result: Add a test for the /up health check route
+
+Run by claude on 2026-11-01, on branch `uw-harness/prove-20261101-1708`, in 5 minutes.
+
+- Agent status: **done**. Acceptance criteria met, as reported by the agent: 3 of 3.
+- Gates after the task: pass. Tests before: 6297 tests, 131 skipped. After: 6300 tests, 131 skipped.
+- Fix rounds after a gate failed: 0. Questions only a human could answer: 0.
+- Unattended (done, gates pass, every requested criterion met, no question for a human): **yes**.
+  - met: A new routing assertion checks that GET /up routes to rails/health#show. test/integration/routing/health_test.rb RoutingHealthTest#test_health_check passes (bin/rails test test/integration/routing/health_test.rb).
+  - met: A new integration test checks that an anonymous GET /up returns 200, also when 'login_required' is enabled. HealthTest#test_anonymous_get_up_should_return_200 and HealthTest#test_anonymous_get_up_should_return_200_when_login_is_required pass: 3 runs, 5 assertions, 0 failures for the two files.
+  - met: Only files under test/ change, check-fast and check pass, and a dated entry is added to docs/harness/log.md. git status shows only the two new test files plus docs/harness/log.md, which this criterion requires. bin/harness check-fast: 1101 files inspected, no offenses; 3383 runs, 0 failures, 0 errors, 92 skips. bin/harness check: 6299 runs, 0 failures, 0 errors, 131 skips; autoload test 1 run, 0 failures.
+
+Gaps in the harness that the agent reported:
+
+- `AGENTS.md`: AGENTS.md and the implement-change skill say to run one test with `bin/rails test <file>`. On macOS this uses the first Ruby on PATH, which is the system Ruby 2.6, and it fails with a missing-bundler error. Only bin/harness picks a supported Ruby. The docs should say to put /opt/homebrew/opt/ruby/bin on PATH first (or use .tool-versions with a version manager), or bin/harness should offer a task that runs a single test.
+- `AGENTS.md`: The task's criterion 'only files under test/ change' conflicts with the rule in AGENTS.md to add a docs/harness/log.md entry for each change. Nothing tells the agent which rule wins. I followed both and treated the log file as the allowed exception.
+- `test/test_helper.rb`: Nothing in the harness docs lists the test base classes (Redmine::RoutingTest, Redmine::IntegrationTest) or the with_settings helper. I had to read test_helper.rb and existing tests to find them. A short section in docs/local-dev.md or the implement-change skill would help.
+
 ## What this does not prove
 
-It does not prove that agents can work on this repository without supervision. It proves that the knowledge is written down and that the gates run and run tests. No pilot task has been run yet. One task is one data point. Review the branch, answer the open questions, and judge the result yourself.
+It does not prove that agents can work on this repository without supervision. It proves that the knowledge is written down and that the gates run and run tests. One real task went through without help from a human, as reported above. One task is one data point. Review the branch, answer the open questions, and judge the result yourself.

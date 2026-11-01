@@ -110,3 +110,20 @@ Risks seen before the harness:
 - full-gate: Left out of bin/harness check: system tests (bin/harness test-system, need Chrome and a Mermaid.js download), the Bazaar non-ASCII test (needs the en_US.ISO8859-1 locale), bundle audit (needs network), and the PostgreSQL/MySQL and Ruby 3.3/3.4 matrix. The upstream workflows tests.yml and linters.yml still run all of them.
 - ci: The uw-harness package is not published on npm (npx -y uw-harness returned 404 here), so the new harness.yml workflow will fail until it is published. The gates were checked with the local build of uw-harness (check passes) and run directly from a clean shell.
 - deploy-explicit: Without human answers, docs/deploy.md and docs/observability.md keep open TODO blocks, so these two checks stay partial.
+
+## 2026-11-01: tests for the /up health check route
+
+Added `test/integration/routing/health_test.rb` (GET /up routes to `rails/health#show`) and `test/integration/health_test.rb` (anonymous GET /up returns 200 with `login_required` off and on). No application code changed. Learned: `Rails::HealthController` inherits from `ActionController::Base`, not from Redmine's `ApplicationController`, so Redmine's authentication filters do not apply to it today; the integration test guards against a future change that would route /up through them. Also learned: `bin/rails test` as written in AGENTS.md uses the first Ruby on PATH, which is the system Ruby 2.6 on macOS and fails; prefix PATH with `/opt/homebrew/opt/ruby/bin` (what `bin/harness` does internally). Nothing left.
+
+## 2026-11-01: pilot task done with the harness by claude
+
+**Task:** Add a test for the /up health check route. config/routes.rb exposes GET /up (rails/health#show) for load balancers and uptime monitors, but no test in test/ covers it. Add a routing test and an integration test, so that a change to the routes or to authentication filters cannot break the health check without a failing test.
+
+I added two new test files for the GET /up health check. One is a routing test that asserts GET /up goes to rails/health#show. The other is an integration test that asserts an anonymous GET /up returns 200, with login_required set to '0' and set to '1'. No application code changed. Rails::HealthController inherits from ActionController::Base, so Redmine's authentication filters do not apply to it now. The integration test will fail if a future change sends /up through those filters. Both gates pass: check-fast ran 3383 tests and check ran 6299 tests, with 0 failures, and RuboCop found no offenses. I added a dated entry to docs/harness/log.md.
+
+- Status reported by the agent: done. Acceptance criteria met: 3 of 3.
+- Gates after the task: pass. Tests before: 6297 tests, 131 skipped. After: 6300 tests, 131 skipped.
+- Fix rounds after a gate failed: 0. Questions for a human: 0. Unattended: yes.
+- Harness gap: `AGENTS.md`: AGENTS.md and the implement-change skill say to run one test with `bin/rails test <file>`. On macOS this uses the first Ruby on PATH, which is the system Ruby 2.6, and it fails with a missing-bundler error. Only bin/harness picks a supported Ruby. The docs should say to put /opt/homebrew/opt/ruby/bin on PATH first (or use .tool-versions with a version manager), or bin/harness should offer a task that runs a single test.
+- Harness gap: `AGENTS.md`: The task's criterion 'only files under test/ change' conflicts with the rule in AGENTS.md to add a docs/harness/log.md entry for each change. Nothing tells the agent which rule wins. I followed both and treated the log file as the allowed exception.
+- Harness gap: `test/test_helper.rb`: Nothing in the harness docs lists the test base classes (Redmine::RoutingTest, Redmine::IntegrationTest) or the with_settings helper. I had to read test_helper.rb and existing tests to find them. A short section in docs/local-dev.md or the implement-change skill would help.
