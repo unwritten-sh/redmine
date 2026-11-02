@@ -1,0 +1,98 @@
+{
+  "task": "redmine-1",
+  "arm": "harness",
+  "start": "695dab4e908a0bddc2e29ec7c9dd2eaad12f438b",
+  "seconds": 346,
+  "result": {
+    "status": "done",
+    "summary": "The toolbar syntax now lives in JavaScript. The server markup only says which buttons exist and how they are grouped. In Ruby, each text formatter's WikiToolbar subclass now has two methods: `format_name` ('common_mark' or 'textile') and `groups` (lists of button names). The base class Redmine::WikiToolbar renders the new contract: a `data-wiki-toolbar-format-value` attribute on the root, a spacer between groups, `wiki-toolbar#apply` with `data-wiki-toolbar-button-param` for normal buttons, `toggleMenu` and its menu parameter for `table` and `precode`, `wiki-toolbar#insertPrecode` with `data-wiki-toolbar-lang-param` for each precode language, and `wiki-toolbar#help` for the help button. The root has exactly three keyboard actions: `keydown->wiki-toolbar#shortcut` and the two Ctrl/Cmd+Shift+P preview toggles. Only strong, em and ins carry `data-wiki-toolbar-shortcut` (b, i, u). In wiki_toolbar_controller.js, an exported `formats` object defines, for common_mark and textile, the inline and line syntax of each button, the table header and separator cells, and the code block syntax by language. The values are the same as the old Ruby values. New actions `apply` and `insertPrecode` replace `wrap` and `wrapLines`, and `insertTable` reads the active format. Stimulus key filters like `keydown.ctrl+b` only match the exact set of modifiers. So the generic `shortcut` handler checks this itself: only Ctrl is pressed (Cmd on macOS). This keeps the old behavior, for example Ctrl+Shift+B still does nothing. The full gate `bin/harness check` passes, and the toolbar and keyboard-shortcut system tests pass in headless Chrome. Nothing was committed.",
+    "changes": [
+      {
+        "path": "lib/redmine/wiki_toolbar.rb",
+        "summary": "Renders the markup contract from format_name and groups: format value, spacers between groups, apply/toggleMenu/help actions, button/menu/lang params, SHORTCUTS for b/i/u, and fixed KEYBOARD_ACTIONS (generic shortcut plus two preview toggles). Removed the code that turned button options into Stimulus parameters."
+      },
+      {
+        "path": "lib/redmine/wiki_formatting/common_mark/helper.rb",
+        "summary": "WikiToolbar now only defines format_name 'common_mark' and its groups of button names."
+      },
+      {
+        "path": "lib/redmine/wiki_formatting/textile/helper.rb",
+        "summary": "WikiToolbar now only defines format_name 'textile' and its groups of button names."
+      },
+      {
+        "path": "app/javascript/controllers/wiki_toolbar_controller.js",
+        "summary": "Adds the exported `formats` (syntax of each button, table and code block for common_mark and textile), a `format` value, the actions apply and insertPrecode, insertTable based on the format, and a generic shortcut handler that checks the modifiers. Removes wrap, wrapLines and menuParams."
+      },
+      {
+        "path": "test/unit/lib/redmine/wiki_toolbar_test.rb",
+        "summary": "Tests the new contract for both formatters: format value, button order and spacers, actions and params, no syntax params in the HTML, exactly three keyboard actions, shortcuts only on strong/em/ins, and the precode lang param."
+      },
+      {
+        "path": "test/integration/layout_test.rb",
+        "summary": "The precode menu check now looks for data-wiki-toolbar-lang-param instead of the prefix param."
+      },
+      {
+        "path": "test/system/wiki_toolbar_test.rb",
+        "summary": "New browser tests: every syntax button for both formatters (including heading replacement), and the Textile highlighted code menu."
+      },
+      {
+        "path": "test/system/keyboard_shortcuts_test.rb",
+        "summary": "New browser test: modifier+Shift+B and modifier+D do not insert anything."
+      },
+      {
+        "path": "docs/harness/log.md",
+        "summary": "Dated entry: what changed, what I learned, what is left."
+      }
+    ],
+    "acceptance": [
+      {
+        "criterion": "The toolbar renders with the new contract for CommonMark and Textile",
+        "met": true,
+        "evidence": "test/unit/lib/redmine/wiki_toolbar_test.rb checks for both formatters: data-wiki-toolbar-format-value, groups with spacers, wiki-toolbar#apply with button param, toggleMenu for table/precode, insertPrecode with lang param, help action, no prefix/suffix/strip/pattern/replacement/header-cell/separator-cell params, exactly the 3 keyboard actions, and shortcuts only on b/i/u. Unit file and layout_test: 19 runs, 0 failures."
+      },
+      {
+        "criterion": "The toolbar works the same in the browser",
+        "met": true,
+        "evidence": "With GOOGLE_CHROME_OPTS_ARGS=headless, test/system/wiki_toolbar_test.rb and test/system/keyboard_shortcuts_test.rb pass: 17 runs, 106 assertions, 0 failures. This covers the old tests (wrap, lines, tables, precode, menus, shortcuts for both formatters, titles, preview toggles) and the new tests for every button in both formatters."
+      },
+      {
+        "criterion": "The change is covered by tests",
+        "met": true,
+        "evidence": "Unit tests for the markup were updated and new ones added; the integration test was updated; system tests were added for button syntax, Textile precode and shortcut modifiers."
+      },
+      {
+        "criterion": "The existing test suite still passes",
+        "met": true,
+        "evidence": "bin/harness check: RuboCop 1099 files, no offenses; 6065 runs, 31675 assertions, 0 failures, 0 errors, 64 skips; autoload test passes."
+      }
+    ],
+    "human_needed": [
+      {
+        "question": "Should plugin text formatters get a documented way to register their toolbar syntax in JavaScript (for example by importing and extending the exported `formats` object)?",
+        "why": "Before, a plugin could describe its syntax fully in Ruby. Now the syntax must exist in the JavaScript `formats`, and there is no official extension point. Upstream has to decide what API plugins get."
+      }
+    ],
+    "harness_used": [
+      "AGENTS.md/CLAUDE.md: commands, verification steps, the rule to add a log entry",
+      "implement-change skill: workflow from finding tests to the gates",
+      "frontend-stimulus skill: importmap/Stimulus conventions and how to run system tests with GOOGLE_CHROME_OPTS_ARGS=headless",
+      "bin/harness check: full gate with RuboCop and all non-system tests",
+      "bin/harness script: shows the Homebrew Ruby fallback I reused for bin/rails",
+      "docs/harness/log.md format"
+    ],
+    "harness_gaps": [
+      {
+        "file": "AGENTS.md",
+        "problem": "It says to run single tests with `bin/rails test ...`, but on macOS this uses the system Ruby 2.6 and fails with a Bundler error. Only bin/harness puts the Homebrew Ruby on PATH. The docs do not say to set PATH or use `bin/harness` for single tests."
+      },
+      {
+        "file": ".agents/skills/frontend-stimulus/SKILL.md",
+        "problem": "It says JavaScript lives in `app/javascript/wiki_formatting/`, but this directory does not exist."
+      },
+      {
+        "file": null,
+        "problem": "There is no JavaScript unit test setup, so the JS-side syntax table can only be tested through Chrome system tests. bin/harness check does not run those tests."
+      }
+    ]
+  }
+}

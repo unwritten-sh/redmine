@@ -1,0 +1,103 @@
+{
+  "task": "redmine-2",
+  "arm": "control",
+  "start": "75f9a624e5824a0bedc1b78da9116a1670df9e1b",
+  "seconds": 258,
+  "result": {
+    "status": "done",
+    "summary": "The feature is done and all tests pass. When a filter value has more than 5 search terms, the issue list (and other lists that use the shared query form), the calendar and the Gantt chart now show a warning and still display the results. The full test suite passes: 6,073 runs, 0 failures, 0 errors, 64 skips.\n\nWhat changed:\n- `Redmine::Search::Tokenizer` now has a `MAX_TOKENS = 5` constant. `tokens` still returns at most 5 terms, and the new `truncated?` method says when the text had more. Repeated terms and terms that are too short are removed before counting.\n- `Query#filter_warnings` returns one message per filter whose value was cut. It only looks at filters of type string, text or search with the operators `~`, `*~`, `!~`, `^` and `$`. Warnings do not make the query invalid.\n- A new helper, `query_filter_warnings`, shows each message as `<p class=\"warning\">`. Rails escapes the terms.\n\nYour task text was garbled in the operator list: the last operator was replaced by a copy of the prompt. I assumed it was `$` (\"ends with\"), the only other operator that splits the value into terms.",
+    "changes": [
+      {
+        "path": "lib/redmine/search.rb",
+        "summary": "Tokenizer: added the MAX_TOKENS = 5 constant, the truncated? method, and a cached private all_tokens; tokens returns the first MAX_TOKENS."
+      },
+      {
+        "path": "app/models/query.rb",
+        "summary": "Added filter_warnings, which builds one message per string/text/search filter with operator ~, *~, !~, ^ or $ whose value was cut."
+      },
+      {
+        "path": "app/helpers/queries_helper.rb",
+        "summary": "Added query_filter_warnings(query), which shows each warning as an HTML-escaped <p class=\"warning\">."
+      },
+      {
+        "path": "app/views/queries/_query_form.html.erb",
+        "summary": "Shows the filter warnings after error_messages_for."
+      },
+      {
+        "path": "app/views/calendars/show.html.erb",
+        "summary": "Shows the filter warnings after error_messages_for."
+      },
+      {
+        "path": "app/views/gantts/show.html.erb",
+        "summary": "Shows the filter warnings after error_messages_for."
+      },
+      {
+        "path": "config/locales/en.yml",
+        "summary": "Added warning_query_filter_max_search_terms with %{max} and %{terms}."
+      },
+      {
+        "path": "test/unit/lib/redmine/search_test.rb",
+        "summary": "Tests for MAX_TOKENS and truncated?, including repeated and too-short terms."
+      },
+      {
+        "path": "test/unit/query_test.rb",
+        "summary": "Tests for filter_warnings: the exact message for each of the 5 operators, query still valid and runs; no warning at 5 terms, for operator =, or for non-text filters; works for any_searchable."
+      },
+      {
+        "path": "test/functional/issues_controller_test.rb",
+        "summary": "Tests that the issue list shows the warning and the results, that the terms are HTML-escaped, and that there is no warning when the value has few terms."
+      },
+      {
+        "path": "test/functional/calendars_controller_test.rb",
+        "summary": "Tests that the calendar shows the warning and still renders."
+      },
+      {
+        "path": "test/functional/gantts_controller_test.rb",
+        "summary": "Tests that the Gantt chart shows the warning and still renders."
+      }
+    ],
+    "acceptance": [
+      {
+        "criterion": "A filter value with more than 5 terms shows the warning and the results",
+        "met": true,
+        "evidence": "Functional tests pass. The issue list shows p.warning with the exact text 'Subject: A maximum of 5 search terms can be used. Only the following terms were used: \"issue\", \"one\", \"two\", \"three\", \"four\"' and the issue rows are still listed. The calendar (ul.cal) and the Gantt chart (section.gantt-pane) also show the warning and still render. The terms are escaped: no <b> element appears inside p.warning."
+      },
+      {
+        "criterion": "The change is covered by tests",
+        "met": true,
+        "evidence": "The 19 new tests (tokenizer, query and functional) pass on the final code: 19 runs, 69 assertions, 0 failures. Rubocop reports no offenses on the changed Ruby files."
+      },
+      {
+        "criterion": "The existing test suite still passes",
+        "met": true,
+        "evidence": "`bin/rails test`: 6,073 runs, 31,686 assertions, 0 failures, 0 errors, 64 skips (the skips are tests that need SCM test repositories, which are missing). The full run started just before a small rubocop cleanup in filter_warnings; the 19 new tests were run again on the final code and pass."
+      }
+    ],
+    "human_needed": [
+      {
+        "question": "Was the last operator in the list meant to be `$` (\"ends with\")?",
+        "why": "The task text was garbled at that spot. I used `$`, the only other operator in the code that splits the value into terms."
+      }
+    ],
+    "harness_used": [
+      "config/database.yml (SQLite test database already set up)",
+      "Homebrew Ruby (/opt/homebrew/opt/ruby/bin) with bundled gems; bin/rails test",
+      "bundle exec rubocop with the project .rubocop.yml",
+      "Existing test patterns in query_test.rb and the controller tests"
+    ],
+    "harness_gaps": [
+      {
+        "file": null,
+        "problem": "No CLAUDE.md or AGENTS.md says which Ruby to use. The system Ruby is 2.6 and too old; I found a working Ruby under /opt/homebrew/opt/ruby by searching."
+      },
+      {
+        "file": "config/database.yml",
+        "problem": "Its header mentions `bin/harness setup`, but there is no bin/harness in the tree."
+      },
+      {
+        "file": null,
+        "problem": "The full test suite is slow and there is no documented faster subset to use for checks. The SCM test repositories are missing, so those tests are skipped."
+      }
+    ]
+  }
+}

@@ -1,0 +1,113 @@
+{
+  "task": "redmine-2",
+  "arm": "harness",
+  "start": "9a4c84440dd1cf33f257580c330083440311ffa2",
+  "seconds": 158,
+  "result": {
+    "status": "done",
+    "summary": "Text filters now show a warning when a value has more than 5 search terms. The tokenizer has `MAX_TOKENS = 5` and a new `truncated?` method; it still returns at most 5 tokens. `Query#filter_warnings` returns one message for each string, text or search filter whose value was cut, when the operator is ~, *~, !~, ^ or $. Warnings do not make the query invalid. A new helper, `QueriesHelper#query_filter_warnings`, shows each message as an HTML-escaped `<p class=\"warning\">`. It is placed under the error messages in `queries/_query_form` (used by issues, time entries, projects, admin projects and users), in the calendar and in the Gantt chart. The results are still shown. The English text is in en.yml. The full gate `bin/harness check` passes: lint clean, 6071 tests, 0 failures, plus the autoload test. The task text was garbled after `^`; I read the missing operator as `$`, the only other operator that tokenizes the value in `sql_for_field`.",
+    "changes": [
+      {
+        "path": "lib/redmine/search.rb",
+        "summary": "Tokenizer: added MAX_TOKENS = 5, truncated? and a memoized private all_tokens; tokens returns all_tokens.first(MAX_TOKENS)."
+      },
+      {
+        "path": "app/models/query.rb",
+        "summary": "Added TOKENIZED_OPERATORS and filter_warnings (label: localized message with quoted terms joined by support.array.words_connector)."
+      },
+      {
+        "path": "config/locales/en.yml",
+        "summary": "Added warning_query_filter_max_search_terms."
+      },
+      {
+        "path": "app/helpers/queries_helper.rb",
+        "summary": "Added query_filter_warnings(query) that renders escaped p.warning elements."
+      },
+      {
+        "path": "app/views/queries/_query_form.html.erb",
+        "summary": "Render filter warnings after error messages."
+      },
+      {
+        "path": "app/views/calendars/show.html.erb",
+        "summary": "Render filter warnings after error messages."
+      },
+      {
+        "path": "app/views/gantts/show.html.erb",
+        "summary": "Render filter warnings after error messages."
+      },
+      {
+        "path": "test/unit/lib/redmine/search_test.rb",
+        "summary": "Tests for MAX_TOKENS, truncated? (more than 5, exactly 5, duplicate and short tokens ignored)."
+      },
+      {
+        "path": "test/unit/query_test.rb",
+        "summary": "Tests for filter_warnings: exact message, each tokenizing operator, no warning for = and !, the search-type filter, no truncation; query stays valid and runs."
+      },
+      {
+        "path": "test/functional/issues_controller_test.rb",
+        "summary": "Issue list shows the exact warning and the results table; terms are HTML-escaped; no warning when there are 5 or fewer terms."
+      },
+      {
+        "path": "test/functional/calendars_controller_test.rb",
+        "summary": "Calendar shows the warning and the calendar."
+      },
+      {
+        "path": "test/functional/gantts_controller_test.rb",
+        "summary": "Gantt shows the warning and the chart."
+      },
+      {
+        "path": "docs/harness/log.md",
+        "summary": "Dated log entry for this change."
+      }
+    ],
+    "acceptance": [
+      {
+        "criterion": "A filter value with more than 5 terms shows the warning and the results",
+        "met": true,
+        "evidence": "IssuesControllerTest#test_index_should_show_warning_for_truncated_search_terms checks the exact p.warning text and that table.issues is present. The calendar test checks p.warning and ul.cal; the Gantt test checks p.warning and div.gantt_subjects_container. All pass."
+      },
+      {
+        "criterion": "Terms are HTML-escaped",
+        "met": true,
+        "evidence": "test_index_should_escape_terms_in_truncated_search_terms_warning: the <b>one</b> term is shown as text and no b element is rendered."
+      },
+      {
+        "criterion": "The change is covered by tests",
+        "met": true,
+        "evidence": "3 tokenizer tests, 4 query unit tests and 5 functional tests; all pass when run alone."
+      },
+      {
+        "criterion": "The existing test suite still passes",
+        "met": true,
+        "evidence": "bin/harness check: 6071 runs, 0 failures, 0 errors, 64 skips (SCM/LDAP environment skips), autoload test passes; RuboCop: no offenses."
+      }
+    ],
+    "human_needed": [
+      {
+        "question": "The task text was garbled after the `^` operator. Should the list of tokenizing operators be exactly ~, *~, !~, ^, $?",
+        "why": "I inferred `$` from sql_for_field, because it is the only other operator that calls sql_contains. Please confirm."
+      },
+      {
+        "question": "Should the new warning string be added to the other locale files, or will translators add it upstream?",
+        "why": "Only en.yml was changed. Other languages will show the English text until it is translated."
+      }
+    ],
+    "harness_used": [
+      "CLAUDE.md/AGENTS.md: commands table, how-to-verify steps, locale convention",
+      "bin/harness check and lint (full gate)",
+      "bin/harness script: shows how to select Homebrew Ruby, which I reused to run single tests",
+      "docs/harness/log.md: entry format",
+      "implement-change skill: test file locations"
+    ],
+    "harness_gaps": [
+      {
+        "file": "CLAUDE.md",
+        "problem": "The docs say to run single tests with `bin/rails test ...`. On macOS this uses system Ruby 2.6 and fails with a bundler error. There is no `bin/harness test <file>` task, and the docs do not say to prepend the Homebrew Ruby to PATH."
+      },
+      {
+        "file": "docs/harness/log.md",
+        "problem": "The log says check runs 6296 tests, but this run had 6071. The numbers are probably out of date or depend on the environment, which can confuse a check against the expected count."
+      }
+    ]
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "task": "redmine-3",
+  "arm": "control",
+  "start": "0d4d41d436b34ec8aa90ab3a0039c814e6f17be0",
+  "seconds": 348,
+  "result": {
+    "status": "done",
+    "summary": "Headings in an included page no longer get \"Edit this section\" links and no longer count as sections of the page. The full non-system suite passes: 6066 runs, 0 failures, 0 errors, 64 skips. How it works: each macro output is now wrapped in two HTML comment markers, unless the macro was defined with `:sections => true`. When `parse_sections` builds the edit links, it skips headings between these markers. Only `collapse` declares `:sections => true` today, because its headings are written in the page text. The markers are removed in the outermost `textilizable` call, so they never reach the final HTML. A counter (`@macro_depth`) keeps them in nested calls while the macro still runs. Because of this, an include inside a collapse block is also excluded. Included headings still render normally, with the anchors the outer pass already gave them before this change. Not committed, as asked.",
+    "changes": [
+      {
+        "path": "app/helpers/application_helper.rb",
+        "summary": "inject_macros wraps the output of macros without :sections in MACRO_OUTPUT_START/END markers and tracks @macro_depth. parse_sections uses a new SECTIONS_RE regex and skips headings between markers, so @current_section counts only the page's own headings. textilizable removes the markers in the outermost call only."
+      },
+      {
+        "path": "lib/redmine/wiki_formatting/macros.rb",
+        "summary": "New :sections macro option, documented and accepted by assert_valid_keys. New macro_sections?(name) helper. The collapse macro is now declared with :sections => true."
+      },
+      {
+        "path": "test/helpers/application_helper_test.rb",
+        "summary": "New test: a page with local headings, an include, and an include inside a collapse gets only section-2 and section-3 links, on the right headings. The included headings are still rendered and no marker is left in the output. Also a test that a plain include render leaves no markers."
+      },
+      {
+        "path": "test/functional/wiki_controller_test.rb",
+        "summary": "New test: on a wiki page that includes Page_with_sections, show gives only 2 edit links, and both are on the local headings. Then edit with section=2 and section=3 opens exactly those local sections."
+      },
+      {
+        "path": "test/unit/lib/redmine/wiki_formatting/macros_test.rb",
+        "summary": "New test for the :sections option: a custom macro with :sections => true and one without; checks the registry flags of collapse and include and the resulting section numbers."
+      }
+    ],
+    "acceptance": [
+      {
+        "criterion": "On a page with local headings and an included page, only local headings get edit links and their section numbers match the numbers used when editing",
+        "met": true,
+        "evidence": "New functional test WikiControllerTest#test_show_should_not_display_section_edit_links_for_included_headings: show gives exactly 2 edit links (div#section-2 before Local-2, div#section-3 before Local-3), and GET edit section=2/3 opens the textarea with exactly 'h2. Local 2 / Text 2' and 'h2. Local 3 / Text 3'. The helper test checks the same thing in the helper output, with includes at the top level and inside collapse."
+      },
+      {
+        "criterion": "The change is covered by tests",
+        "met": true,
+        "evidence": "Four new tests: one helper test for section links, one helper test for marker cleanup, one macros unit test for the :sections option, and one functional test for show and edit. All pass. The existing test_section_edit_links_with_collapse_macro still passes, so collapse headings keep their links."
+      },
+      {
+        "criterion": "The existing test suite still passes",
+        "met": true,
+        "evidence": "`bin/rails test` (all tests except system tests): 6066 runs, 31679 assertions, 0 failures, 0 errors, 64 skips. The skips come from missing SCM repos, ImageMagick and LDAP. RuboCop: no offenses in the 5 changed files. System tests were not run (no UI behavior changed)."
+      }
+    ],
+    "human_needed": [],
+    "harness_used": [
+      "The implement-change skill (.claude/skills/implement-change/SKILL.md) gave the workflow and the test locations; test/helpers/application_helper_test.rb test_section_edit_links_with_collapse_macro was a good template.",
+      "Fixtures wiki_pages/wiki_contents (Page_with_sections, Another_page) were enough for the functional test."
+    ],
+    "harness_gaps": [
+      {
+        "file": "bin/harness",
+        "problem": "The skill tells you to run `bin/harness setup`, `check-fast` and `check`, but this worktree has no bin/harness (only the main repo has one). I ran `bin/rails test` and `rubocop` by hand instead."
+      },
+      {
+        "file": null,
+        "problem": "On the default PATH, `ruby` is macOS system Ruby 2.6, which fails because bundler 4.0.6 is missing. Nothing in the repo says to use /opt/homebrew/opt/ruby@4/bin; I had to find it myself. A .ruby-version file or a note in the skill would help."
+      },
+      {
+        "file": "docs/product.md",
+        "problem": "Not checked. The skill also points to docs/architecture.md and docs/harness/log.md, and I did not check whether this tree has them. I did not add a log entry."
+      }
+    ]
+  }
+}

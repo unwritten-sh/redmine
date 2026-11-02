@@ -1,0 +1,122 @@
+{
+  "task": "redmine-2",
+  "arm": "control-haiku",
+  "start": "fd4ff1c63bbda52de5db0f7a5afcbd2280ce24ef",
+  "seconds": 303,
+  "result": {
+    "status": "done",
+    "summary": "Added truncation warnings for text filters with more than 5 search terms (Redmine #44464). The tokenizer now exposes MAX_TOKENS and truncated?, Query#filter_warnings returns one message per truncated filter, and the issue list query form, calendar and Gantt show them as <p class=\"warning\"> above the results, with the terms HTML-escaped. Results are still shown and the query stays valid. Tests were added at unit and functional level. The full non-system suite (bin/rails test) passes: 6091 runs, 0 failures, 0 errors, 37 skips. Nothing was committed or pushed.",
+    "changes": [
+      {
+        "path": "lib/redmine/search.rb",
+        "summary": "Tokenizer: MAX_TOKENS = 5 constant, tokens returns at most MAX_TOKENS (computed from a private all_tokens list), new truncated? method true when there are more than MAX_TOKENS terms."
+      },
+      {
+        "path": "app/models/query.rb",
+        "summary": "New filter_warnings method. For string/text/search filters with operator ~, *~, !~, ^ or $, it tokenizes value.first and returns a localized message per truncated filter. Constants TOKENIZED_OPERATORS and TOKENIZED_FILTER_TYPES. Terms are quoted and joined with support.array.words_connector."
+      },
+      {
+        "path": "config/locales/en.yml",
+        "summary": "Added notice_search_terms_truncated with the English message text (%{filter}, %{max}, %{terms})."
+      },
+      {
+        "path": "app/views/queries/_filter_warnings.html.erb",
+        "summary": "New partial rendering each query.filter_warnings message as <p class=\"warning\"> (ERB-escaped)."
+      },
+      {
+        "path": "app/views/queries/_query_form.html.erb",
+        "summary": "Renders the filter warnings partial after error_messages_for (issue list and other lists using the query form)."
+      },
+      {
+        "path": "app/views/gantts/show.html.erb",
+        "summary": "Renders the filter warnings partial above the Gantt chart."
+      },
+      {
+        "path": "app/views/calendars/show.html.erb",
+        "summary": "Renders the filter warnings partial above the calendar."
+      },
+      {
+        "path": "test/unit/lib/redmine/search_test.rb",
+        "summary": "Tests for MAX_TOKENS, tokens limit, truncated? (boundary cases, duplicates, short tokens, quoted phrases)."
+      },
+      {
+        "path": "test/unit/query_test.rb",
+        "summary": "Tests for filter_warnings: exact message, all tokenized operators, non-tokenized operators and types ignored, text and any_searchable filters, quoted phrases, query stays valid and runs."
+      },
+      {
+        "path": "test/functional/issues_controller_test.rb",
+        "summary": "Tests that the issue list shows the warning with results, escapes HTML in terms, and does not warn at 5 terms."
+      },
+      {
+        "path": "test/functional/gantts_controller_test.rb",
+        "summary": "Test that the Gantt chart shows the warning."
+      },
+      {
+        "path": "test/functional/calendars_controller_test.rb",
+        "summary": "Test that the calendar shows the warning and still renders the calendar."
+      }
+    ],
+    "acceptance": [
+      {
+        "criterion": "A filter value with more than 5 terms shows the warning and the results",
+        "met": true,
+        "evidence": "IssuesControllerTest#test_index_should_warn_when_search_terms_are_truncated_and_show_results asserts p.warning with the exact message and the matching issue row; GanttsControllerTest#test_gantt_should_show_search_terms_warning_with_results and CalendarsControllerTest#test_show_should_show_search_terms_warning_with_results check the warning plus chart/calendar output. All pass."
+      },
+      {
+        "criterion": "Warning message format is '<filter label>: A maximum of 5 search terms can be used. Only the following terms were used: \"one\", \"two\", ...' with the English text in the locale file",
+        "met": true,
+        "evidence": "config/locales/en.yml notice_search_terms_truncated; QueryTest#test_filter_warnings_should_warn_when_contains_value_has_too_many_terms asserts the exact string."
+      },
+      {
+        "criterion": "Terms are HTML-escaped and the warning is a <p class=\"warning\">",
+        "met": true,
+        "evidence": "IssuesControllerTest#test_index_should_escape_search_terms_in_warnings: the body contains &lt;b&gt;bold&lt;/b&gt; and no raw <b>bold</b>; the partial uses <p class=\"warning\"><%= %>."
+      },
+      {
+        "criterion": "Warnings do not make the query invalid or stop it from running",
+        "met": true,
+        "evidence": "QueryTest#test_filter_warnings_should_not_make_the_query_invalid_or_stop_it_from_running asserts valid? and that the issue is returned."
+      },
+      {
+        "criterion": "Only string/text/search filters with splitting operators warn",
+        "met": true,
+        "evidence": "Unit tests for '=' operator and float filter return []; text and any_searchable warn; all five tokenized operators warn."
+      },
+      {
+        "criterion": "Change is covered by tests",
+        "met": true,
+        "evidence": "Unit tests in search_test.rb (8 runs) and query_test.rb (22 runs for the filtered set) and functional tests in issues, gantts and calendars controllers, all passing."
+      },
+      {
+        "criterion": "Existing test suite still passes",
+        "met": true,
+        "evidence": "bin/rails test (unit, functional, integration; system tests not run): 6091 runs, 31822 assertions, 0 failures, 0 errors, 37 skips. Rubocop reports no offenses on the changed Ruby files."
+      }
+    ],
+    "human_needed": [
+      {
+        "question": "Should the '$' (ends with) operator also produce the warning? It splits the value into terms the same way as ~, *~, !~ and ^, so I included it. The task text listed the operators in a way that looked truncated.",
+        "why": "The spec's operator list was garbled, so I could not tell whether $ was meant to be included."
+      }
+    ],
+    "harness_used": [
+      "AGENTS.md/CLAUDE.md global instructions (writing rules, attribution)",
+      "Repo test helpers: bin/rails test, test/unit and test/functional suites, existing assert_query_filters helper patterns",
+      "bundle exec rubocop for lint of changed files"
+    ],
+    "harness_gaps": [
+      {
+        "file": null,
+        "problem": "The system Ruby is 2.6, which cannot run this Redmine (needs Ruby 4.0 per Gemfile.lock). I used /opt/homebrew/opt/ruby@4/bin on PATH. This is not documented in the repo, so a new contributor could lose time on it."
+      },
+      {
+        "file": "task description",
+        "problem": "The operator list in the task was garbled (an unrelated sentence was embedded in it), so the exact set of splitting operators had to be inferred from Query#tokenized_like_conditions usage."
+      },
+      {
+        "file": null,
+        "problem": "No agent-specific harness files, and no README or docs for the test setup. The test DB config (config/database.yml) was pre-generated and git-ignored."
+      }
+    ]
+  }
+}

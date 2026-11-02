@@ -1,0 +1,61 @@
+{
+  "task": "redmine-3",
+  "arm": "control-haiku",
+  "start": "bc8b4bc0acdee3f50ecb3b7e19412f106d33ce68",
+  "seconds": 366,
+  "result": {
+    "status": "done",
+    "summary": "Headings that come from the output of a macro are no longer given section edit links and no longer count as page sections. Only macros that declare `:sections => true` (now `collapse`) keep their headings as sections. The included headings are still rendered normally, including anchors and TOC entries. Verified with the full non-system test suite (6079 runs, 0 failures) and rubocop (no offenses). Nothing was committed or pushed.",
+    "changes": [
+      {
+        "path": "lib/redmine/wiki_formatting/macros.rb",
+        "summary": "`macro` accepts a new `:sections` option (added to assert_valid_keys) and documents it. `collapse` is declared with `:sections => true`. Added `macro_with_sections?(name)` helper in Definitions."
+      },
+      {
+        "path": "app/helpers/application_helper.rb",
+        "summary": "inject_macros marks the headings of output from macros without `:sections` with a `data-non-section` attribute (via new `mark_non_section_headings`). parse_sections skips such headings: no edit link and no section number. parse_headings strips the marker so it does not appear in the final HTML. The HTML_RE/heading anchor behaviour is otherwise unchanged."
+      },
+      {
+        "path": "test/helpers/application_helper_test.rb",
+        "summary": "Added 4 tests: local headings around an include get edit links with section numbers matching the source; an include inside collapse keeps collapse's headings as sections; a macro declared with `:sections => true` keeps its heading as a section; a macro without the option does not."
+      }
+    ],
+    "acceptance": [
+      {
+        "criterion": "On a page with local headings and an included page, only the local headings get edit links, and their section numbers match the numbers used when editing the page",
+        "met": true,
+        "evidence": "New test test_section_edit_links_should_ignore_headings_of_included_page passes: Child page 1 from the include has no edit link, and Local B/Local C get section=2 and section=3, matching the raw source numbering. Against the original helper code this test fails."
+      },
+      {
+        "criterion": "The change is covered by tests",
+        "met": true,
+        "evidence": "Four new tests in test/helpers/application_helper_test.rb (include, include inside collapse, :sections declared macro, undeclared macro). Run against original app/helpers/application_helper.rb, 3 of them fail (include, include in collapse, undeclared macro), confirming they detect the bug. The existing collapse section tests still pass."
+      },
+      {
+        "criterion": "The existing test suite still passes",
+        "met": true,
+        "evidence": "`bin/rails test` (Ruby 4.0.0 from /opt/homebrew/opt/ruby@4, the system Ruby 2.6 is too old for Rails 8.1): 6079 runs, 31805 assertions, 0 failures, 0 errors, 37 skips (pre-existing skips). Rubocop: 3 files inspected, no offenses."
+      }
+    ],
+    "human_needed": [],
+    "harness_used": [
+      "Read/Grep/Glob tools to locate the macro, heading and section code and the existing section tests",
+      "Bash to run rails tests with the Ruby 4 toolchain and rubocop",
+      "Existing test suite (bin/rails test) as regression check"
+    ],
+    "harness_gaps": [
+      {
+        "file": "CLAUDE.md (global, imports @RTK.md)",
+        "problem": "The imported RTK.md does not exist in the repository, so that instruction could not be applied. Nothing in the repo referred to it."
+      },
+      {
+        "file": "repository root",
+        "problem": "No documented way to run the tests. The default system Ruby (2.6) is too old for Rails 8.1 and bundler 4.0.6 is required by Gemfile.lock. Working setup needed /opt/homebrew/opt/ruby@4/bin on PATH, and config/database.yml (sqlite) was already present."
+      },
+      {
+        "file": "app/helpers/application_helper.rb (parse_headings)",
+        "problem": "The marker attribute is stripped only where parse_headings runs. Top-level calls with headings: false (the PDF export in wiki_pdf_helper.rb) keep the data-non-section attribute in their HTML output when a page uses include. This is harmless for the PDF renderer, but I did not verify the PDF output."
+      }
+    ]
+  }
+}

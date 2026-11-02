@@ -1,0 +1,277 @@
+diff --git a/app/helpers/application_helper.rb b/app/helpers/application_helper.rb
+index 52cdd7518..33857f420 100644
+--- a/app/helpers/application_helper.rb
++++ b/app/helpers/application_helper.rb
+@@ -1004,6 +1004,10 @@ module ApplicationHelper
+       replace_toc(text, @parsed_headings)
+     end
+ 
++    # Markers are kept when rendering text inside a macro, so that the
++    # enclosing call can still identify headings coming from macros
++    remove_macro_section_markers(text) unless @macro_depth.to_i > 0
++
+     text.html_safe
+   end
+ 
+@@ -1403,11 +1407,31 @@ module ApplicationHelper
+     }x
+   HEADING_RE = /(<h(\d)( [^>]+)?>(.+?)<\/h(\d)>)/im unless const_defined?(:HEADING_RE)
+ 
++  # Markers that surround the output of macros whose headings are not
++  # sections of the rendered text (eg. headings of a page included with
++  # the include macro)
++  MACRO_NO_SECTIONS_START = '<!--redmine-macro-no-sections-start-->' unless const_defined?(:MACRO_NO_SECTIONS_START)
++  MACRO_NO_SECTIONS_END = '<!--redmine-macro-no-sections-end-->' unless const_defined?(:MACRO_NO_SECTIONS_END)
++  unless const_defined?(:MACRO_NO_SECTIONS_RE)
++    MACRO_NO_SECTIONS_RE = /<!--redmine-macro-no-sections-(start|end)-->/
++  end
++  unless const_defined?(:SECTION_HEADING_RE)
++    SECTION_HEADING_RE = /#{MACRO_NO_SECTIONS_RE}|#{HEADING_RE}/im
++  end
++
+   def parse_sections(text, project, obj, attr, only_path, options)
+     return unless options[:edit_section_links]
+ 
+-    text.gsub!(HEADING_RE) do
+-      heading, level = $1, $2
++    macro_depth = 0
++    text.gsub!(SECTION_HEADING_RE) do
++      marker, heading, level = $1, $2, $3
++      if marker
++        macro_depth += (marker == 'start' ? 1 : -1)
++        next $&
++      end
++      # Headings that come from the output of a macro are not sections
++      next heading if macro_depth > 0
++
+       @current_section += 1
+       if @current_section > 1
+         content_tag(
+@@ -1507,7 +1531,16 @@ module ApplicationHelper
+       if execute && orig && orig =~ MACROS_RE
+         esc, all, macro, args, block = $2, $3, $4.downcase, $6.to_s, $7.try(:strip)
+         if esc.nil?
+-          h(exec_macro(macro, obj, args, block, options) || all)
++          begin
++            @macro_depth = @macro_depth.to_i + 1
++            out = h(exec_macro(macro, obj, args, block, options) || all)
++          ensure
++            @macro_depth -= 1
++          end
++          if !macro_sections?(macro) && HEADING_RE.match?(out)
++            out = "#{MACRO_NO_SECTIONS_START}#{out}#{MACRO_NO_SECTIONS_END}"
++          end
++          out
+         else
+           h(all)
+         end
+@@ -1519,6 +1552,10 @@ module ApplicationHelper
+     end
+   end
+ 
++  def remove_macro_section_markers(text)
++    text.gsub!(MACRO_NO_SECTIONS_RE, '')
++  end
++
+   TOC_RE = /<p>\{\{((<|&lt;)|(>|&gt;))?toc\}\}<\/p>/i unless const_defined?(:TOC_RE)
+ 
+   # Renders the TOC with given headings
+diff --git a/lib/redmine/wiki_formatting/macros.rb b/lib/redmine/wiki_formatting/macros.rb
+index f7e6c5016..a22a0b198 100644
+--- a/lib/redmine/wiki_formatting/macros.rb
++++ b/lib/redmine/wiki_formatting/macros.rb
+@@ -26,6 +26,13 @@ module Redmine
+           Redmine::WikiFormatting::Macros.available_macros.key?(name.to_sym)
+         end
+ 
++        # Returns true if the headings in the output of macro +name+ are
++        # sections of the rendered text (see the :sections macro option)
++        def macro_sections?(name)
++          macro_options = Redmine::WikiFormatting::Macros.available_macros[name.to_sym]
++          !!macro_options&.[](:sections)
++        end
++
+         def exec_macro(name, obj, args, text, options={})
+           macro_options = Redmine::WikiFormatting::Macros.available_macros[name.to_sym]
+           return unless macro_options
+@@ -100,6 +107,11 @@ module Redmine
+         # * :desc - A description of the macro
+         # * :parse_args => false - Disables arguments parsing (the whole arguments
+         #   string is passed to the macro)
++        # * :sections => true - Headings in the macro output are part of the
++        #   text that contains the macro (eg. the collapse macro): they get
++        #   section edit links and count as sections. By default, headings in
++        #   the macro output (eg. the headings of a page included with the
++        #   include macro) are not sections of the text.
+         #
+         # Macro blocks accept 2 or 3 arguments:
+         # * obj: the object that is rendered (eg. an Issue, a WikiContent...)
+@@ -157,7 +169,7 @@ module Redmine
+         #
+         # If a block of text is given, the closing tag }} must be at the start of a new line.
+         def macro(name, options={}, &block)
+-          options.assert_valid_keys(:desc, :parse_args)
++          options.assert_valid_keys(:desc, :parse_args, :sections)
+           unless /\A\w+\z/.match?(name.to_s)
+             raise "Invalid macro name: #{name} (only 0-9, A-Z, a-z and _ characters are accepted)"
+           end
+@@ -297,7 +309,7 @@ module Redmine
+       desc "Inserts of collapsed block of text. Examples:\n\n" +
+              "{{collapse\nThis is a block of text that is collapsed by default.\nIt can be expanded by clicking a link.\n}}\n\n" +
+              "{{collapse(View details...)\nWith custom link text.\n}}"
+-      macro :collapse do |obj, args, text|
++      macro :collapse, :sections => true do |obj, args, text|
+         html_id = "collapse-#{Redmine::Utils.random_hex(4)}"
+         show_label = args[0] || l(:button_show)
+         hide_label = args[1] || args[0] || l(:button_hide)
+diff --git a/test/helpers/application_helper_test.rb b/test/helpers/application_helper_test.rb
+index 446c5f39a..9ba988c76 100644
+--- a/test/helpers/application_helper_test.rb
++++ b/test/helpers/application_helper_test.rb
+@@ -1685,6 +1685,115 @@ class ApplicationHelperTest < Redmine::HelperTest
+     end
+   end
+ 
++  def test_section_edit_links_with_include_macro
++    @project = Project.find(1)
++    set_language_if_valid 'en'
++    with_settings :text_formatting => 'common_mark' do
++      included = WikiPage.new(:wiki => @project.wiki, :title => 'Included_with_headings')
++      included.content = WikiContent.new(:text => "## Included A\n\ntext\n\n## Included B\n", :author => User.find(1))
++      included.save!
++
++      raw = <<~RAW
++        # Wiki
++
++        ## Section A
++
++        {{include(Included_with_headings)}}
++
++        ## Section B
++      RAW
++      result =
++        textilizable(
++          raw,
++          :edit_section_links =>
++            {:controller => 'wiki', :action => 'edit',
++            :project_id => '1', :id => 'Test'}
++        ).delete("\n")
++
++      # Only the local headings get section edit links
++      assert_select_in result, 'div.contextual[id^=section-]', 2
++      assert_select_in result, 'div#section-2 + a[name=Section-A]'
++      assert_select_in result, 'div#section-2 a[href=?]', '/projects/1/wiki/Test/edit?section=2'
++      assert_select_in result, 'div#section-3 + a[name=Section-B]'
++      assert_select_in result, 'div#section-3 a[href=?]', '/projects/1/wiki/Test/edit?section=3'
++      # Included headings are still rendered with anchors
++      assert_include '<a name="Included-A"></a><h2 >', result
++      assert_include '<a name="Included-B"></a><h2 >', result
++      # Markers are removed from the output
++      assert_not_include 'redmine-macro-no-sections', result
++
++      # Section numbers match the numbers used when editing the page
++      formatter = Redmine::WikiFormatting.formatter.new(raw)
++      assert_match /\A## Section A/, formatter.get_section(2).first
++      assert_equal '## Section B', formatter.get_section(3).first
++    end
++  end
++
++  def test_section_edit_links_with_include_macro_inside_collapse_macro
++    @project = Project.find(1)
++    set_language_if_valid 'en'
++    with_settings :text_formatting => 'common_mark' do
++      included = WikiPage.new(:wiki => @project.wiki, :title => 'Included_with_headings')
++      included.content = WikiContent.new(:text => "## Included A\n", :author => User.find(1))
++      included.save!
++
++      raw = <<~RAW
++        # Wiki
++
++        {{collapse
++        ## Section A
++
++        {{include(Included_with_headings)}}
++        }}
++
++        ## Section B
++      RAW
++      result =
++        textilizable(
++          raw,
++          :edit_section_links =>
++            {:controller => 'wiki', :action => 'edit',
++            :project_id => '1', :id => 'Test'}
++        ).delete("\n")
++
++      assert_select_in result, 'div.contextual[id^=section-]', 2
++      assert_select_in result, 'div#section-2 + a[name=Section-A]'
++      assert_select_in result, 'div#section-3 + a[name=Section-B]'
++      assert_include '<a name="Included-A"></a><h2 >', result
++      assert_not_include 'redmine-macro-no-sections', result
++    end
++  end
++
++  def test_section_edit_links_with_macro_declaring_sections
++    Redmine::WikiFormatting::Macros.register do
++      macro :heading_with_sections, :sections => true do |obj, args|
++        content_tag('h2', 'Macro heading')
++      end
++      macro :heading_without_sections do |obj, args|
++        content_tag('h2', 'Other heading')
++      end
++    end
++    set_language_if_valid 'en'
++    with_settings :text_formatting => 'common_mark' do
++      raw = "# Wiki\n\n{{heading_without_sections}}\n\n{{heading_with_sections}}\n\n## Section\n"
++      result =
++        textilizable(
++          raw,
++          :edit_section_links =>
++            {:controller => 'wiki', :action => 'edit',
++            :project_id => '1', :id => 'Test'}
++        ).delete("\n")
++
++      assert_select_in result, 'div.contextual[id^=section-]', 2
++      assert_select_in result, 'div#section-2 + a[name=Macro-heading]'
++      assert_select_in result, 'div#section-3 + a[name=Section]'
++      assert_include '<a name="Other-heading"></a><h2 >', result
++    end
++  ensure
++    Redmine::WikiFormatting::Macros.available_macros.delete(:heading_with_sections)
++    Redmine::WikiFormatting::Macros.available_macros.delete(:heading_without_sections)
++  end
++
+   def test_default_formatter
+     with_settings :text_formatting => 'unknown' do
+       text = 'a *link*: http://www.example.net/'
+diff --git a/test/unit/lib/redmine/wiki_formatting/macros_test.rb b/test/unit/lib/redmine/wiki_formatting/macros_test.rb
+index 8c3011575..373efaa27 100644
+--- a/test/unit/lib/redmine/wiki_formatting/macros_test.rb
++++ b/test/unit/lib/redmine/wiki_formatting/macros_test.rb
+@@ -77,6 +77,26 @@ class Redmine::WikiFormatting::MacrosTest < Redmine::HelperTest
+     end
+   end
+ 
++  def test_macro_registration_with_sections_option
++    Redmine::WikiFormatting::Macros.register do
++      macro :with_sections, :sections => true do |obj, args|
++        ''
++      end
++      macro :without_sections do |obj, args|
++        ''
++      end
++    end
++
++    assert macro_sections?('with_sections')
++    assert_not macro_sections?('without_sections')
++    assert macro_sections?('collapse')
++    assert_not macro_sections?('include')
++    assert_not macro_sections?('unknown_macro')
++  ensure
++    Redmine::WikiFormatting::Macros.available_macros.delete(:with_sections)
++    Redmine::WikiFormatting::Macros.available_macros.delete(:without_sections)
++  end
++
+   def test_macro_name_with_upper_case
+     with_settings :text_formatting => 'textile' do
+       Redmine::WikiFormatting::Macros.macro(:UpperCase) {|obj, args| 'Upper'}

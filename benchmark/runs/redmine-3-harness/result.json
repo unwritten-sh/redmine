@@ -1,0 +1,66 @@
+{
+  "task": "redmine-3",
+  "arm": "harness",
+  "start": "ecd25bf42fdda252fa89c7c9e2acba85c7e77027",
+  "seconds": 212,
+  "result": {
+    "status": "done",
+    "summary": "I fixed #44623. Macros can now be defined with a `:sections => true` option, and only `collapse` uses it. When a wiki page is rendered with edit section links, the output of every other macro (for example `include`) is replaced by a placeholder while `parse_sections` numbers the headings. The output is put back right after that step. So included headings are still rendered with their anchors and stay in the TOC, but they get no \"Edit this section\" link and do not change the numbering. Local headings, including headings inside `collapse`, now have the same section numbers as the editor uses, because the editor counts sections in the page source. New tests cover this. I checked that the main new test fails without the fix. `bin/harness check` passes: RuboCop and Stylelint report no offenses, and 6065 tests run with 0 failures. Behavior change for plugins: a plugin macro that renders text from the page source must add `:sections => true`, or its headings lose their edit links.",
+    "changes": [
+      {
+        "path": "lib/redmine/wiki_formatting/macros.rb",
+        "summary": "Accept and document the new :sections macro option, add the macro_output_has_sections?(name) helper, and declare collapse with :sections => true."
+      },
+      {
+        "path": "app/helpers/application_helper.rb",
+        "summary": "During rendering with :edit_section_links, inject_macros replaces the output of macros without :sections with a placeholder. parse_sections numbers the headings, then puts the output back. New helper hide_macro_output_from_sections."
+      },
+      {
+        "path": "test/helpers/application_helper_test.rb",
+        "summary": "New test_section_edit_links_with_include_macro: a page with local headings, an included page with headings and a collapse block. Checks that included headings are rendered without edit links, that there are exactly 4 edit links, and that each section number matches SectionHelper#get_section on the source."
+      },
+      {
+        "path": "test/unit/lib/redmine/wiki_formatting/macros_test.rb",
+        "summary": "Tests for registering a macro with :sections => true or without it (edit links kept or skipped), and a test that an unknown option raises ArgumentError."
+      },
+      {
+        "path": "docs/harness/log.md",
+        "summary": "Dated entry: what changed, what I learned, what is left."
+      }
+    ],
+    "acceptance": [
+      {
+        "criterion": "On a page with local headings and an included page, only the local headings get edit links, and their section numbers match the numbers used when editing the page",
+        "met": true,
+        "evidence": "test_section_edit_links_with_include_macro passes. The included headings 'Included A' and 'Included B' are rendered but have no edit links. Exactly 4 edit links are rendered (sections 2–5), and for each one formatter#get_section(n) on the source returns the heading with the same title. Without the fix, the test fails (it expects 4 edit links and finds more)."
+      },
+      {
+        "criterion": "The change is covered by tests",
+        "met": true,
+        "evidence": "1 new helper test and 2 new unit tests in macros_test.rb. `bin/rails test` on both files: 193 runs, 0 failures."
+      },
+      {
+        "criterion": "The existing test suite still passes",
+        "met": true,
+        "evidence": "`bin/harness check`: 1099 files inspected, no offenses. 6065 runs, 31667 assertions, 0 failures, 0 errors, 64 skips. Autoload test: 1 run, 0 failures."
+      }
+    ],
+    "human_needed": [],
+    "harness_used": [
+      "AGENTS.md/CLAUDE.md: the gate commands (`bin/harness check`), the rule to put tests next to the code, and the log requirement",
+      "bin/harness: it picks the Homebrew Ruby. I copied its PATH logic so I could run single tests with `bin/rails test`",
+      "Existing test test_section_edit_links_with_collapse_macro: a good template for the new test",
+      "docs/harness/log.md: the format for the log entry"
+    ],
+    "harness_gaps": [
+      {
+        "file": "bin/harness",
+        "problem": "There is no task to run one test file or one test (for example `bin/harness test test/unit/foo_test.rb`). AGENTS.md says to run `bin/rails test <file>`, but on macOS this uses the system Ruby 2.6 and fails with a bundler error. You must first add the Homebrew Ruby to PATH by hand."
+      },
+      {
+        "file": "docs/architecture.md",
+        "problem": "The wiki rendering pipeline is not documented: textilizable, catch_macros/inject_macros, parse_sections/parse_headings, and how section numbers relate to SectionHelper#get_section on the source. I had to work this out from the code."
+      }
+    ]
+  }
+}

@@ -1,0 +1,53 @@
+[
+  {
+    "id": "redmine-1",
+    "sha": "20267c31b6d22ee33349529b7572dd91e0e5ac8d",
+    "kind": "front-end refactor (wiki toolbar)",
+    "text": "Redmine issue #43259. Today the server renders the wiki toolbar with the whole syntax of every button in the HTML: each button carries Stimulus parameters such as the prefix, suffix, strip pattern or replacement text that it inserts, and each text formatter (CommonMark and Textile) describes those in Ruby. Move the syntax to the browser: for each text formatter, define in JavaScript what each button inserts, and let the server markup only describe which buttons exist and how they are grouped.\n\nThe new markup contract:\n- The toolbar root element gets a `data-wiki-toolbar-format-value` attribute with the name of the text formatter: `common_mark` or `textile`.\n- Each text formatter on the Ruby side only gives its format name and its groups of button names; groups are still separated by spacers.\n- A normal button uses the Stimulus action `wiki-toolbar#apply` and a `data-wiki-toolbar-button-param` with the button name (for example `strong`). It no longer carries prefix, suffix, strip, replacement, header-cell or separator-cell parameters.\n- The `table` and `precode` buttons keep opening their menus with `wiki-toolbar#toggleMenu` and their menu parameter. Each language item of the precode menu uses the action `wiki-toolbar#insertPrecode` and a `data-wiki-toolbar-lang-param` with the language. The help button keeps `wiki-toolbar#help`.\n- Keyboard shortcuts: the toolbar has exactly these actions: one generic `keydown->wiki-toolbar#shortcut`, plus the two existing Ctrl+Shift+P and Cmd+Shift+P preview toggles. Only the strong (b), italic (i) and underline (u) buttons have a `data-wiki-toolbar-shortcut`.\n\nFor the user, the toolbar must behave exactly as before for both formatters (same buttons, same inserted text, same shortcuts, same menus).\n\nDone when:\n- the toolbar renders with the contract above for CommonMark and Textile, and works the same in the browser;\n- the change is covered by tests;\n- the existing test suite still passes.",
+    "tests": [
+      "test/integration/layout_test.rb",
+      "test/unit/lib/redmine/wiki_toolbar_test.rb"
+    ],
+    "product": [
+      "app/javascript/controllers/wiki_toolbar_controller.js",
+      "app/javascript/wiki_formatting/common_mark.js",
+      "app/javascript/wiki_formatting/textile.js",
+      "config/importmap.rb",
+      "lib/redmine/wiki_formatting/common_mark/helper.rb",
+      "lib/redmine/wiki_formatting/textile/helper.rb",
+      "lib/redmine/wiki_toolbar.rb"
+    ]
+  },
+  {
+    "id": "redmine-2",
+    "sha": "f62db8f5e91c164f70a4ec704431243d7105ebdd",
+    "kind": "feature (query filters)",
+    "text": "Redmine issue #44464. Text filters of queries (for example \"Subject contains any of\") split the value into search terms, and only the first 5 terms are used. Today the extra terms are dropped silently, so users think they searched for words that were ignored.\n\nShow a warning when this happens:\n- The search tokenizer (`Redmine::Search::Tokenizer`) keeps returning at most 5 tokens from `tokens`, with the limit in a constant `MAX_TOKENS = 5`, and gets a `truncated?` method that is true when the text had more than 5 terms.\n- Queries get a `filter_warnings` method that returns a list of messages, one per filter whose value was truncated. Only filters of type string, text or search, with an operator that splits the value into terms (`~`, `*~`, `!~`, `^`, `$`), can produce a warning. Warnings do not make the query invalid and do not stop it from running.\n- The message is `<filter label>: A maximum of 5 search terms can be used. Only the following terms were used: \"one\", \"two\", \"three\", \"four\", \"five\"` (the terms in quotes, joined with the locale's word connector, here \", \"). Add the English text to the locale file.\n- The warnings are shown as `<p class=\"warning\">` above the results in the query form of the issue list (and other lists that use it), the calendar and the Gantt chart. The terms must be HTML-escaped. The results are still displayed.\n\nDone when:\n- a filter value with more than 5 terms shows the warning and the results;\n- the change is covered by tests;\n- the existing test suite still passes.",
+    "tests": [
+      "test/functional/issues_controller_test.rb",
+      "test/unit/lib/redmine/search_test.rb",
+      "test/unit/query_test.rb"
+    ],
+    "product": [
+      "app/helpers/queries_helper.rb",
+      "app/models/query.rb",
+      "app/views/calendars/show.html.erb",
+      "app/views/gantts/show.html.erb",
+      "app/views/queries/_query_form.html.erb",
+      "lib/redmine/search.rb"
+    ]
+  },
+  {
+    "id": "redmine-3",
+    "sha": "b426f65250a1e18c3de3c26409a47e3d53254efd",
+    "kind": "bug fix (wiki rendering)",
+    "text": "Redmine issue #44623. When a wiki page includes another page with the `{{include(Page)}}` macro, the headings of the included page get \"Edit this section\" links, as if they were sections of the current page. The section numbers of the page then shift: the edit link of a local heading after the include points to the wrong section number, so the user edits the wrong part of the page.\n\nFix it: headings that come from the output of a macro like `include` must not get section edit links and must not count as sections of the page. Headings in the output of the `collapse` macro are part of the page text, so they must keep their edit links. Let a macro declare this when it is defined, with a `:sections => true` option (only `collapse` uses it today); macros without it are treated like `include`. The included headings are still rendered normally.\n\nDone when:\n- on a page with local headings and an included page, only the local headings get edit links, and their section numbers match the numbers used when editing the page;\n- the change is covered by tests;\n- the existing test suite still passes.",
+    "tests": [
+      "test/helpers/application_helper_test.rb"
+    ],
+    "product": [
+      "app/helpers/application_helper.rb",
+      "lib/redmine/wiki_formatting/macros.rb"
+    ]
+  }
+]

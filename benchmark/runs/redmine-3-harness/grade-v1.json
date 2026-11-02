@@ -1,0 +1,35 @@
+{
+  "task": "redmine-3",
+  "arm": "harness",
+  "applied": true,
+  "apply_error": "",
+  "hidden": {
+    "code": 1,
+    "tests": {
+      "ran": 137,
+      "skipped": 3,
+      "failed": 1
+    },
+    "seconds": 2,
+    "tail": "\nRun options: --seed 35033\n\n# Running:\n\n.....................................................S...................................S...F\n\nFailure:\nApplicationHelperTest#test_section_edit_links_should_ignore_headings_from_include_macro_inside_collapse_macro [test/helpers/application_helper_test.rb:1774]:\nExpected: [\"2\", \"3\", \"4\"]\n  Actual: [\"2\", \"3\", \"4\", \"5\"]\n\nbin/rails test test/helpers/application_helper_test.rb:1744\n\n.......S...................................\n\nFinished in 1.377250s, 99.4736 runs/s, 405.8813 assertions/s.\n137 runs, 559 assertions, 1 failures, 0 errors, 3 skips\n\nYou have skipped tests. Run with --verbose for details.\n"
+  },
+  "full": {
+    "code": 0,
+    "tests": {
+      "ran": 6065,
+      "skipped": 64,
+      "failed": 0
+    },
+    "seconds": 56,
+    "tail": ""
+  },
+  "reference": {
+    "code": 0,
+    "tests": {
+      "ran": 6063,
+      "skipped": 64,
+      "failed": 0
+    }
+  },
+  "solved": false
+}

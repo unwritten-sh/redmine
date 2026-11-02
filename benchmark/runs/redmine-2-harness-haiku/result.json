@@ -1,0 +1,111 @@
+{
+  "task": "redmine-2",
+  "arm": "harness-haiku",
+  "start": "4bbea3a96369e74dfd560acde760a08839396918",
+  "seconds": 252,
+  "result": {
+    "status": "done",
+    "summary": "Text filters (string, text, search) whose operator splits the value into search terms now show a warning when the value has more than 5 terms. The tokenizer keeps at most 5 terms (MAX_TOKENS) and reports truncated?. Query#filter_warnings returns one message per truncated filter. The warnings render as <p class=\"warning\"> above the results in the issue list, time entry list and report, calendar and Gantt chart, with the terms HTML-escaped. Results are still shown and the query stays valid. check-fast and the full check both pass (no failures, lint clean). Nothing was committed. A dated entry was added to docs/harness/log.md, as AGENTS.md asks.",
+    "changes": [
+      {
+        "path": "lib/redmine/search.rb",
+        "summary": "Tokenizer: MAX_TOKENS = 5 constant, tokens returns at most MAX_TOKENS, new truncated? (true when more than MAX_TOKENS terms), the term list is memoized in a private all_tokens."
+      },
+      {
+        "path": "app/models/query.rb",
+        "summary": "TERMS_OPERATORS (~, *~, !~, ^, $) and TERMS_FILTER_TYPES (string, text, search) constants; new filter_warnings returns one localized message per truncated filter, using the filter label, the max, and the quoted terms joined with support.array.words_connector."
+      },
+      {
+        "path": "app/helpers/queries_helper.rb",
+        "summary": "New render_query_filter_warnings(query) that renders each warning as <p class=\"warning\"> (content_tag escapes the text)."
+      },
+      {
+        "path": "app/views/issues/index.html.erb",
+        "summary": "Renders the filter warnings above the results."
+      },
+      {
+        "path": "app/views/timelog/index.html.erb",
+        "summary": "Renders the filter warnings above the results."
+      },
+      {
+        "path": "app/views/timelog/report.html.erb",
+        "summary": "Renders the filter warnings above the results (same query form as the time entry list)."
+      },
+      {
+        "path": "app/views/gantts/show.html.erb",
+        "summary": "Renders the filter warnings after the query errors, above the chart."
+      },
+      {
+        "path": "app/views/calendars/show.html.erb",
+        "summary": "Renders the filter warnings after the query errors, above the calendar."
+      },
+      {
+        "path": "config/locales/en.yml",
+        "summary": "Adds notice_query_search_terms_truncated: \"%{label}: A maximum of %{max} search terms can be used. Only the following terms were used: %{terms}\"."
+      },
+      {
+        "path": "test/unit/search_test.rb",
+        "summary": "Tokenizer tests: max tokens and truncated?, no truncation at 5 terms, ignored terms and duplicates do not count."
+      },
+      {
+        "path": "test/unit/query_test.rb",
+        "summary": "filter_warnings tests: exact message and results still returned, one warning per truncated filter, no warning at 5 terms, no warning for non-splitting operators."
+      },
+      {
+        "path": "test/helpers/queries_helper_test.rb",
+        "summary": "Helper tests: warnings are rendered as escaped p.warning, nothing rendered without warnings."
+      },
+      {
+        "path": "test/functional/issues_controller_test.rb",
+        "summary": "Issue list with 6 terms shows the warning and the matching issue."
+      },
+      {
+        "path": "test/functional/gantts_controller_test.rb",
+        "summary": "Gantt with 6 terms shows the warning and the chart."
+      },
+      {
+        "path": "test/functional/calendars_controller_test.rb",
+        "summary": "Calendar with 6 terms shows the warning and the calendar."
+      },
+      {
+        "path": "docs/harness/log.md",
+        "summary": "Dated entry for the change: what changed, what was learned, what is left."
+      }
+    ],
+    "acceptance": [
+      {
+        "criterion": "A filter value with more than 5 terms shows the warning and the results",
+        "met": true,
+        "evidence": "Functional tests: issues index (p.warning with the 5-term message, and a[href=\"/issues/1\"] still listed), gantt and calendar (p.warning matches and the chart/calendar renders). All pass."
+      },
+      {
+        "criterion": "The change is covered by tests",
+        "met": true,
+        "evidence": "Tokenizer tests (search_test.rb), filter_warnings tests (query_test.rb), helper escaping test (queries_helper_test.rb), and functional tests for issues, gantt and calendar (issues_controller_test.rb, gantts_controller_test.rb, calendars_controller_test.rb). Targeted run: 14 runs, 0 failures before the gantt/calendar additions; those 3 also pass."
+      },
+      {
+        "criterion": "The existing test suite still passes",
+        "met": true,
+        "evidence": "bin/harness check-fast: 3257 runs, 0 failures, 0 errors, 48 skips, lint ok (exit 0). bin/harness check: 1099 files no offenses, 6072 runs, 31676 assertions, 0 failures, 0 errors, 64 skips (exit 0). System tests were not run (need Chrome), as the project's full gate excludes them."
+      }
+    ],
+    "human_needed": [],
+    "harness_used": [
+      "AGENTS.md (commands, verify steps, never-do list)",
+      "bin/harness check-fast and bin/harness check",
+      "docs/harness/log.md (dated entry format)",
+      "docs/harness/brief.md",
+      "docs/local-dev.md"
+    ],
+    "harness_gaps": [
+      {
+        "file": "AGENTS.md",
+        "problem": "Single-file test commands (bin/rails test ...) fail with the default macOS Ruby 2.6 (Bundler lockfile error) and only work when a Ruby 3.3 to 4.0 is first on PATH. bin/harness picks a Ruby, but it is not documented that bin/rails needs the same PATH. I had to prepend /opt/homebrew/opt/ruby/bin."
+      },
+      {
+        "file": "AGENTS.md",
+        "problem": "The docs do not say which Ruby the gates need on a Mac with the system Ruby; docs/harness/log.md mentions Homebrew Ruby 4.0 but the single-test command in AGENTS.md does not."
+      }
+    ]
+  }
+}

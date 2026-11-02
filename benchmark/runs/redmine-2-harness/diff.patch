@@ -1,0 +1,356 @@
+diff --git a/app/helpers/queries_helper.rb b/app/helpers/queries_helper.rb
+index 5a5e591fe..05eee841e 100644
+--- a/app/helpers/queries_helper.rb
++++ b/app/helpers/queries_helper.rb
+@@ -22,6 +22,11 @@ require 'redmine/export/csv'
+ module QueriesHelper
+   include ApplicationHelper
+ 
++  # Renders the warnings of the query filters (eg. truncated search terms)
++  def query_filter_warnings(query)
++    safe_join(query.filter_warnings.map {|warning| content_tag('p', warning, :class => 'warning')})
++  end
++
+   def filters_options_for_select(query)
+     ungrouped = []
+     grouped = {label_string: [], label_date: [], label_time_tracking: [], label_attachment: []}
+diff --git a/app/models/query.rb b/app/models/query.rb
+index fc9b62b39..89061a7f2 100644
+--- a/app/models/query.rb
++++ b/app/models/query.rb
+@@ -493,6 +493,28 @@ class Query < ApplicationRecord
+     end
+   end
+ 
++  # Operators that split the filter value into search terms
++  TOKENIZED_OPERATORS = %w(~ *~ !~ ^ $).freeze
++
++  # Returns a list of warning messages for the filters of the query.
++  # Warnings do not make the query invalid.
++  def filter_warnings
++    warnings = []
++    (filters || {}).each_key do |field|
++      next unless [:string, :text, :search].include?(type_for(field))
++      next unless TOKENIZED_OPERATORS.include?(operator_for(field))
++
++      tokenizer = Redmine::Search::Tokenizer.new(value_for(field))
++      next unless tokenizer.truncated?
++
++      terms = tokenizer.tokens.map {|t| "\"#{t}\""}.join(::I18n.t('support.array.words_connector'))
++      warnings << "#{label_for(field)}: " +
++        l(:warning_query_filter_max_search_terms,
++          :count => Redmine::Search::Tokenizer::MAX_TOKENS, :terms => terms)
++    end
++    warnings
++  end
++
+   def validate_query_filters
+     filters.each_key do |field|
+       if values_for(field)
+diff --git a/app/views/calendars/show.html.erb b/app/views/calendars/show.html.erb
+index 66e3d9081..1870fe8d7 100644
+--- a/app/views/calendars/show.html.erb
++++ b/app/views/calendars/show.html.erb
+@@ -51,6 +51,7 @@
+ <% end %>
+ 
+ <%= error_messages_for 'query' %>
++<%= query_filter_warnings(@query) %>
+ <% if @query.valid? %>
+ <%= render :partial => 'common/calendar', :locals => {:calendar => @calendar} %>
+ 
+diff --git a/app/views/gantts/show.html.erb b/app/views/gantts/show.html.erb
+index 4772bc11c..c24e666ee 100644
+--- a/app/views/gantts/show.html.erb
++++ b/app/views/gantts/show.html.erb
+@@ -10,6 +10,7 @@
+ 
+ <%= render partial: 'query_form', locals: {project: @project, query: @query, gantt: @gantt} %>
+ <%= error_messages_for 'query' %>
++<%= query_filter_warnings(@query) %>
+ 
+ <% if @query.valid? %>
+ <%= render partial: 'chart', locals: {gantt: @gantt, query: @query} %>
+diff --git a/app/views/queries/_query_form.html.erb b/app/views/queries/_query_form.html.erb
+index 22a4c9171..68f29c8e6 100644
+--- a/app/views/queries/_query_form.html.erb
++++ b/app/views/queries/_query_form.html.erb
+@@ -77,6 +77,7 @@
+ </div>
+ 
+ <%= error_messages_for @query %>
++<%= query_filter_warnings(@query) %>
+ 
+ <%= javascript_tag do %>
+ $(function ($) {
+diff --git a/config/locales/en.yml b/config/locales/en.yml
+index cb9ce115e..be32b797d 100644
+--- a/config/locales/en.yml
++++ b/config/locales/en.yml
+@@ -238,6 +238,7 @@ en:
+   error_no_projects_with_tracker_allowed_for_new_issue: "There are no projects with trackers for which you can create an issue"
+   error_move_of_child_not_possible: "Subtask %{child} could not be moved to the new project: %{errors}"
+   error_cannot_reassign_time_entries_to_an_issue_about_to_be_deleted: "Spent time cannot be reassigned to an issue that is about to be deleted"
++  warning_query_filter_max_search_terms: "A maximum of %{count} search terms can be used. Only the following terms were used: %{terms}"
+   warning_fields_cleared_on_bulk_edit: "Changes will result in the automatic deletion of values from one or more fields on the selected objects"
+   error_exceeds_maximum_hours_per_day: "Cannot log more than %{max_hours} hours on the same day (%{logged_hours} hours have already been logged)"
+   error_can_not_delete_auth_source: "This authentication mode is in use and cannot be deleted."
+diff --git a/docs/harness/log.md b/docs/harness/log.md
+index 1b09cc68d..329c20285 100644
+--- a/docs/harness/log.md
++++ b/docs/harness/log.md
+@@ -110,3 +110,7 @@ Risks seen before the harness:
+ - full-gate: Left out of bin/harness check: system tests (bin/harness test-system, need Chrome and a Mermaid.js download), the Bazaar non-ASCII test (needs the en_US.ISO8859-1 locale), bundle audit (needs network), and the PostgreSQL/MySQL and Ruby 3.3/3.4 matrix. The upstream workflows tests.yml and linters.yml still run all of them.
+ - ci: The uw-harness package is not published on npm (npx -y uw-harness returned 404 here), so the new harness.yml workflow will fail until it is published. The gates were checked with the local build of uw-harness (check passes) and run directly from a clean shell.
+ - deploy-explicit: Without human answers, docs/deploy.md and docs/observability.md keep open TODO blocks, so these two checks stay partial.
++
++## 2026-11-01: warning for truncated search terms in query filters (#44464)
++
++`Redmine::Search::Tokenizer` now has `MAX_TOKENS = 5` and `truncated?`. `Query#filter_warnings` returns one message per string, text or search filter whose value has more than 5 terms with a tokenizing operator (`~`, `*~`, `!~`, `^`, `$`). `QueriesHelper#query_filter_warnings` renders them as `p.warning` in `queries/_query_form` (issues, time entries, projects, users), the calendar and the Gantt chart. The query stays valid and results are shown. Tests in search_test, query_test and the issues, calendars and gantts functional tests. `bin/harness check` passes (6071 tests, 0 failures). Learned: `bin/rails` uses the Ruby on PATH (macOS 2.6), so prefix PATH with `/opt/homebrew/opt/ruby/bin` and its gem bindir to run single tests. Left: the warning text is only in `en.yml`; other locales fall back to English.
+diff --git a/lib/redmine/search.rb b/lib/redmine/search.rb
+index 3605d866f..36b477c62 100644
+--- a/lib/redmine/search.rb
++++ b/lib/redmine/search.rb
+@@ -127,22 +127,38 @@ module Redmine
+     end
+ 
+     class Tokenizer
++      # Maximum number of tokens used for a search
++      MAX_TOKENS = 5
++
+       def initialize(question)
+         @question = question.to_s
+       end
+ 
++      # Returns at most MAX_TOKENS tokens extracted from the question
+       def tokens
+-        # extract tokens from the question
+-        # eg. hello "bye bye" => ["hello", "bye bye"]
+-        tokens = @question.scan(/"[^"]+"|[^\p{Zs}]+/).map do |token|
+-          # Remove quotes from quoted tokens, strip surrounding whitespace
+-          # e.g. "\" foo bar \"" => "foo bar"
+-          token.gsub(/\A"\p{Zs}*|\p{Zs}*"\Z/, '')
++        all_tokens.first(MAX_TOKENS)
++      end
++
++      # Returns true if the question has more than MAX_TOKENS tokens
++      def truncated?
++        all_tokens.size > MAX_TOKENS
++      end
++
++      private
++
++      def all_tokens
++        @all_tokens ||= begin
++          # extract tokens from the question
++          # eg. hello "bye bye" => ["hello", "bye bye"]
++          tokens = @question.scan(/"[^"]+"|[^\p{Zs}]+/).map do |token|
++            # Remove quotes from quoted tokens, strip surrounding whitespace
++            # e.g. "\" foo bar \"" => "foo bar"
++            token.gsub(/\A"\p{Zs}*|\p{Zs}*"\Z/, '')
++          end
++          # tokens must be at least 2 characters long
++          # but for Chinese characters (Chinese HANZI/Japanese KANJI), tokens can be one character
++          tokens.uniq.select{|w| w.length > 1 || w =~ /\p{Han}/}
+         end
+-        # tokens must be at least 2 characters long
+-        # but for Chinese characters (Chinese HANZI/Japanese KANJI), tokens can be one character
+-        # no more than 5 tokens to search for
+-        tokens.uniq.select{|w| w.length > 1 || w =~ /\p{Han}/}.first 5
+       end
+     end
+ 
+diff --git a/test/functional/calendars_controller_test.rb b/test/functional/calendars_controller_test.rb
+index 2baeaaafb..7131379ef 100644
+--- a/test/functional/calendars_controller_test.rb
++++ b/test/functional/calendars_controller_test.rb
+@@ -295,4 +295,20 @@ class CalendarsControllerTest < Redmine::ControllerTest
+     end
+     assert_select 'span.non-working-date-name', 1
+   end
++
++  def test_show_should_show_warning_for_truncated_search_terms
++    get(
++      :show,
++      :params => {
++        :project_id => 1,
++        :set_filter => 1,
++        :f => ['subject'],
++        :op => {'subject' => '~'},
++        :v => {'subject' => ['one two three four five six']}
++      }
++    )
++    assert_response :success
++    assert_select 'p.warning', :text => /A maximum of 5 search terms can be used/
++    assert_select 'ul.cal'
++  end
+ end
+diff --git a/test/functional/gantts_controller_test.rb b/test/functional/gantts_controller_test.rb
+index 3cc3c1b02..dfb6eaea0 100644
+--- a/test/functional/gantts_controller_test.rb
++++ b/test/functional/gantts_controller_test.rb
+@@ -423,4 +423,20 @@ class GanttsControllerTest < Redmine::ControllerTest
+ 
+     travel_to Date.new(2025, 10, 15)
+   end
++
++  def test_show_should_show_warning_for_truncated_search_terms
++    get(
++      :show,
++      :params => {
++        :project_id => 1,
++        :set_filter => 1,
++        :f => ['subject'],
++        :op => {'subject' => '~'},
++        :v => {'subject' => ['one two three four five six']}
++      }
++    )
++    assert_response :success
++    assert_select 'p.warning', :text => /A maximum of 5 search terms can be used/
++    assert_select 'div.gantt_subjects_container'
++  end
+ end
+diff --git a/test/functional/issues_controller_test.rb b/test/functional/issues_controller_test.rb
+index 4da71e8d9..611a532f6 100644
+--- a/test/functional/issues_controller_test.rb
++++ b/test/functional/issues_controller_test.rb
+@@ -9396,4 +9396,50 @@ class IssuesControllerTest < Redmine::ControllerTest
+       assert_select 'thead.related-issues th', text: 'Total estimated time'
+     end
+   end
++
++  def test_index_should_show_warning_for_truncated_search_terms
++    get(
++      :index,
++      :params => {
++        :set_filter => 1,
++        :f => ['subject'],
++        :op => {'subject' => '*~'},
++        :v => {'subject' => ['issue one two three four <b>five</b> six']}
++      }
++    )
++    assert_response :success
++    assert_select 'p.warning', :count => 1, :text => 'Subject: A maximum of 5 search terms can be used. ' \
++      'Only the following terms were used: "issue", "one", "two", "three", "four"'
++    assert_select 'p.warning b', 0
++    assert_select 'table.issues'
++  end
++
++  def test_index_should_escape_terms_in_truncated_search_terms_warning
++    get(
++      :index,
++      :params => {
++        :set_filter => 1,
++        :f => ['subject'],
++        :op => {'subject' => '~'},
++        :v => {'subject' => ['<b>one</b> two three four five six']}
++      }
++    )
++    assert_response :success
++    assert_select 'p.warning', :text => /"<b>one<\/b>"/
++    assert_select 'p.warning b', 0
++  end
++
++  def test_index_should_not_show_warning_without_truncated_search_terms
++    get(
++      :index,
++      :params => {
++        :set_filter => 1,
++        :f => ['subject'],
++        :op => {'subject' => '*~'},
++        :v => {'subject' => ['issue one']}
++      }
++    )
++    assert_response :success
++    assert_select 'p.warning', 0
++  end
+ end
+diff --git a/test/unit/lib/redmine/search_test.rb b/test/unit/lib/redmine/search_test.rb
+index e2d77cca0..6c4e446c9 100644
+--- a/test/unit/lib/redmine/search_test.rb
++++ b/test/unit/lib/redmine/search_test.rb
+@@ -35,4 +35,23 @@ class Redmine::Search::Tokenize < ActiveSupport::TestCase
+     value = '"phrase one" "phrase two"'
+     assert_equal ["phrase one", "phrase two"], Redmine::Search::Tokenizer.new(value).tokens
+   end
++
++  def test_tokenize_should_return_at_most_max_tokens
++    tokenizer = Redmine::Search::Tokenizer.new('one two three four five six seven')
++    assert_equal 5, Redmine::Search::Tokenizer::MAX_TOKENS
++    assert_equal %w[one two three four five], tokenizer.tokens
++    assert tokenizer.truncated?
++  end
++
++  def test_tokenize_should_not_be_truncated_with_max_tokens
++    tokenizer = Redmine::Search::Tokenizer.new('one two three four five')
++    assert_equal %w[one two three four five], tokenizer.tokens
++    assert_not tokenizer.truncated?
++  end
++
++  def test_tokenize_truncated_should_ignore_duplicate_and_short_tokens
++    tokenizer = Redmine::Search::Tokenizer.new('one two three four five one a b')
++    assert_equal %w[one two three four five], tokenizer.tokens
++    assert_not tokenizer.truncated?
++  end
+ end
+diff --git a/test/unit/query_test.rb b/test/unit/query_test.rb
+index 3f1e2dd38..d6f483c6b 100644
+--- a/test/unit/query_test.rb
++++ b/test/unit/query_test.rb
+@@ -3487,4 +3487,56 @@ class QueryTest < ActiveSupport::TestCase
+     assigned_to_values = query.assigned_to_values
+     assert_equal expected_names, assigned_to_values[1..].map(&:first)
+   end
++
++  def test_filter_warnings_should_warn_about_truncated_search_terms
++    User.current = User.find(1)
++    query = IssueQuery.new(
++      :name => '_',
++      :filters => {
++        'subject' => {:operator => '*~', :values => ['one two three four five six']}
++      }
++    )
++    assert query.valid?
++    assert_equal [
++      'Subject: A maximum of 5 search terms can be used. ' \
++        'Only the following terms were used: "one", "two", "three", "four", "five"'
++    ], query.filter_warnings
++    assert_nothing_raised { find_issues_with_query(query) }
++  end
++
++  def test_filter_warnings_for_tokenized_operators
++    User.current = User.find(1)
++    %w(~ *~ !~ ^ $).each do |operator|
++      query = IssueQuery.new(
++        :name => '_',
++        :filters => {'subject' => {:operator => operator, :values => ['a1 a2 a3 a4 a5 a6']}}
++      )
++      assert_equal 1, query.filter_warnings.size, "operator #{operator}"
++    end
++    %w(= !).each do |operator|
++      query = IssueQuery.new(
++        :name => '_',
++        :filters => {'subject' => {:operator => operator, :values => ['a1 a2 a3 a4 a5 a6']}}
++      )
++      assert_equal [], query.filter_warnings, "operator #{operator}"
++    end
++  end
++
++  def test_filter_warnings_for_search_filter
++    User.current = User.find(1)
++    query = IssueQuery.new(
++      :name => '_',
++      :filters => {'any_searchable' => {:operator => '~', :values => ['a1 a2 a3 a4 a5 a6']}}
++    )
++    assert_equal 1, query.filter_warnings.size
++  end
++
++  def test_filter_warnings_should_be_empty_without_truncation
++    User.current = User.find(1)
++    query = IssueQuery.new(
++      :name => '_',
++      :filters => {'subject' => {:operator => '~', :values => ['one two three four five']}}
++    )
++    assert_equal [], query.filter_warnings
++  end
+ end

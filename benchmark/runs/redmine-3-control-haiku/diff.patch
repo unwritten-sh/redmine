@@ -1,0 +1,197 @@
+diff --git a/app/helpers/application_helper.rb b/app/helpers/application_helper.rb
+index 52cdd7518..bb9b94e4c 100644
+--- a/app/helpers/application_helper.rb
++++ b/app/helpers/application_helper.rb
+@@ -1402,12 +1402,18 @@ module ApplicationHelper
+               $)
+     }x
+   HEADING_RE = /(<h(\d)( [^>]+)?>(.+?)<\/h(\d)>)/im unless const_defined?(:HEADING_RE)
++  # Attribute added to the headings of the output of macros that are not
++  # sections of the page (eg. the included page of the include macro)
++  NON_SECTION_HEADING_ATTR = 'data-non-section' unless const_defined?(:NON_SECTION_HEADING_ATTR)
+ 
+   def parse_sections(text, project, obj, attr, only_path, options)
+     return unless options[:edit_section_links]
+ 
+     text.gsub!(HEADING_RE) do
+       heading, level = $1, $2
++      # headings from the output of a macro that is not a section of the page are ignored
++      next heading if heading.start_with?("<h#{level} #{NON_SECTION_HEADING_ATTR}")
++
+       @current_section += 1
+       if @current_section > 1
+         content_tag(
+@@ -1433,6 +1439,7 @@ module ApplicationHelper
+ 
+     text.gsub!(HEADING_RE) do
+       level, attrs, content = $2.to_i, $3, $4
++      attrs = attrs.to_s.sub(" #{NON_SECTION_HEADING_ATTR}", '')
+       item = strip_tags(content).strip
+       anchor = sanitize_anchor_name(item)
+       # used for single-file wiki export
+@@ -1507,7 +1514,9 @@ module ApplicationHelper
+       if execute && orig && orig =~ MACROS_RE
+         esc, all, macro, args, block = $2, $3, $4.downcase, $6.to_s, $7.try(:strip)
+         if esc.nil?
+-          h(exec_macro(macro, obj, args, block, options) || all)
++          html = exec_macro(macro, obj, args, block, options)
++          html = mark_non_section_headings(html) if html.is_a?(String) && !macro_with_sections?(macro)
++          h(html || all)
+         else
+           h(all)
+         end
+@@ -1519,6 +1528,12 @@ module ApplicationHelper
+     end
+   end
+ 
++  # Marks the headings of the output of a macro that is not a section of the page
++  def mark_non_section_headings(html)
++    marked = html.gsub(/<h(\d)(?=[\s>])/, "<h\\1 #{NON_SECTION_HEADING_ATTR}")
++    html.html_safe? ? marked.html_safe : marked
++  end
++
+   TOC_RE = /<p>\{\{((<|&lt;)|(>|&gt;))?toc\}\}<\/p>/i unless const_defined?(:TOC_RE)
+ 
+   # Renders the TOC with given headings
+diff --git a/lib/redmine/wiki_formatting/macros.rb b/lib/redmine/wiki_formatting/macros.rb
+index f7e6c5016..fb17cf198 100644
+--- a/lib/redmine/wiki_formatting/macros.rb
++++ b/lib/redmine/wiki_formatting/macros.rb
+@@ -69,6 +69,13 @@ module Redmine
+         def current_project(obj)
+           @project || (obj.is_a?(Project) && obj) || (obj.respond_to?(:project) && obj.project)
+         end
++
++        # Returns true if the macro +name+ declares that its output is part
++        # of the page text, ie. that its headings are sections of the page
++        # (see the :sections option of Macros.macro)
++        def macro_with_sections?(name)
++          !!Redmine::WikiFormatting::Macros.available_macros.dig(name.to_sym, :sections)
++        end
+       end
+ 
+       @@available_macros = {}
+@@ -100,6 +107,10 @@ module Redmine
+         # * :desc - A description of the macro
+         # * :parse_args => false - Disables arguments parsing (the whole arguments
+         #   string is passed to the macro)
++        # * :sections => true - Declares that the output of the macro is part of
++        #   the page text: its headings get section edit links and are counted
++        #   as sections of the page. By default, the headings of a macro output
++        #   (eg. the included page of the include macro) are not sections of the page.
+         #
+         # Macro blocks accept 2 or 3 arguments:
+         # * obj: the object that is rendered (eg. an Issue, a WikiContent...)
+@@ -157,7 +168,7 @@ module Redmine
+         #
+         # If a block of text is given, the closing tag }} must be at the start of a new line.
+         def macro(name, options={}, &block)
+-          options.assert_valid_keys(:desc, :parse_args)
++          options.assert_valid_keys(:desc, :parse_args, :sections)
+           unless /\A\w+\z/.match?(name.to_s)
+             raise "Invalid macro name: #{name} (only 0-9, A-Z, a-z and _ characters are accepted)"
+           end
+@@ -297,7 +308,7 @@ module Redmine
+       desc "Inserts of collapsed block of text. Examples:\n\n" +
+              "{{collapse\nThis is a block of text that is collapsed by default.\nIt can be expanded by clicking a link.\n}}\n\n" +
+              "{{collapse(View details...)\nWith custom link text.\n}}"
+-      macro :collapse do |obj, args, text|
++      macro :collapse, :sections => true do |obj, args, text|
+         html_id = "collapse-#{Redmine::Utils.random_hex(4)}"
+         show_label = args[0] || l(:button_show)
+         hide_label = args[1] || args[0] || l(:button_hide)
+diff --git a/test/helpers/application_helper_test.rb b/test/helpers/application_helper_test.rb
+index 446c5f39a..334626db5 100644
+--- a/test/helpers/application_helper_test.rb
++++ b/test/helpers/application_helper_test.rb
+@@ -1685,6 +1685,90 @@ class ApplicationHelperTest < Redmine::HelperTest
+     end
+   end
+ 
++  def test_section_edit_links_should_ignore_headings_of_included_page
++    raw = <<~RAW
++      h2. Local A
++
++      {{include(Child_1)}}
++
++      h2. Local B
++
++      h2. Local C
++    RAW
++    @project = Project.find(1)
++    set_language_if_valid 'en'
++    with_settings :text_formatting => 'textile' do
++      result =
++        textilizable(
++          raw,
++          :edit_section_links =>
++            {:controller => 'wiki', :action => 'edit',
++            :project_id => '1', :id => 'Test'}
++        ).delete("\n")
++
++      # the included heading is rendered normally, without edit link
++      assert_include '<a name="Child-page-1"></a><h1 >Child page 1', result
++      assert_select_in result, 'div.contextual', 2
++      assert_select_in result, 'div#section-2 a[href="/projects/1/wiki/Test/edit?section=2"]'
++      assert_select_in result, 'div#section-3 a[href="/projects/1/wiki/Test/edit?section=3"]'
++    end
++  end
++
++  def test_section_edit_links_should_ignore_headings_of_included_page_inside_collapse_macro
++    raw = <<~RAW
++      h2. Section A
++
++      {{collapse(View details...)
++      h2. Section B
++
++      {{include(Child_1)}}
++      }}
++
++      h2. Section C
++    RAW
++    @project = Project.find(1)
++    set_language_if_valid 'en'
++    with_settings :text_formatting => 'textile' do
++      result =
++        textilizable(
++          raw,
++          :edit_section_links =>
++            {:controller => 'wiki', :action => 'edit',
++            :project_id => '1', :id => 'Test'}
++        ).delete("\n")
++
++      assert_include '<a name="Child-page-1"></a><h1 >Child page 1', result
++      assert_select_in result, 'div.contextual', 2
++      assert_select_in result, 'div#section-2 a[href="/projects/1/wiki/Test/edit?section=2"]'
++      assert_select_in result, 'div#section-3 a[href="/projects/1/wiki/Test/edit?section=3"]'
++    end
++  end
++
++  def test_section_edit_links_with_macro_declaring_sections_option
++    Redmine::WikiFormatting::Macros.register do
++      macro :section_declaring_macro, :sections => true do |obj, args|
++        '<h2>Macro heading</h2>'.html_safe
++      end
++    end
++    Redmine::WikiFormatting::Macros.register do
++      macro :section_ignoring_macro do |obj, args|
++        '<h2>Macro heading</h2>'.html_safe
++      end
++    end
++    edit_options = {:edit_section_links => {:controller => 'wiki', :action => 'edit', :project_id => '1', :id => 'Test'}}
++    set_language_if_valid 'en'
++    with_settings :text_formatting => 'textile' do
++      result = textilizable("h2. Local A\n\n{{section_declaring_macro}}\n\nh2. Local B", edit_options).delete("\n")
++      assert_select_in result, 'div.contextual', 2
++      assert_select_in result, 'div#section-2 a[href="/projects/1/wiki/Test/edit?section=2"]'
++      assert_select_in result, 'div#section-3 a[href="/projects/1/wiki/Test/edit?section=3"]'
++
++      result = textilizable("h2. Local A\n\n{{section_ignoring_macro}}\n\nh2. Local B", edit_options).delete("\n")
++      assert_select_in result, 'div.contextual', 1
++      assert_select_in result, 'div#section-2 a[href="/projects/1/wiki/Test/edit?section=2"]'
++    end
++  end
++
+   def test_default_formatter
+     with_settings :text_formatting => 'unknown' do
+       text = 'a *link*: http://www.example.net/'

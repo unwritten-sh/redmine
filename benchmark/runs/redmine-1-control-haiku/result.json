@@ -1,0 +1,104 @@
+{
+  "task": "redmine-1",
+  "arm": "control-haiku",
+  "start": "c5479fcf858a575caee1aab79d720be851c15ce3",
+  "seconds": 522,
+  "result": {
+    "status": "partial",
+    "summary": "The wiki toolbar now sends only button names and groups from the server. The CommonMark and Textile syntax (what each button inserts, table and precode templates) moved into JavaScript files under app/javascript/wiki_toolbar/. The Stimulus controller reads the format from data-wiki-toolbar-format-value and applies the syntax through the new apply, insertPrecode and insertTable actions. Ruby unit, layout, wiki formatting and functional tests pass (652 functional/integration runs, 0 failures). A node harness comparing the old controller with the old parameters against the new one gave identical output on 2,033 cases for both formats. The browser system tests could not run here because Chrome/chromedriver is not installed, so the browser behaviour is verified only by that harness and by reading the code. Nothing was committed.",
+    "changes": [
+      {
+        "path": "lib/redmine/wiki_toolbar.rb",
+        "summary": "Base class now renders from format_name and groups (spacers between groups). Normal buttons get action wiki-toolbar#apply and button param; table/precode get toggleMenu with menu param; help keeps wiki-toolbar#help. Shortcut attributes only on strong/em/ins. Root gets data-wiki-toolbar-format-value. Keyboard data-action is exactly the generic shortcut plus the two preview toggles. Syntax params, buttons method and SPACER symbol removed."
+      },
+      {
+        "path": "lib/redmine/wiki_formatting/common_mark/helper.rb",
+        "summary": "WikiToolbar subclass now only defines format_name ('common_mark') and groups."
+      },
+      {
+        "path": "lib/redmine/wiki_formatting/textile/helper.rb",
+        "summary": "WikiToolbar subclass now only defines format_name ('textile') and groups."
+      },
+      {
+        "path": "app/javascript/wiki_toolbar/common_mark.js",
+        "summary": "New. CommonMark syntax per button (wrap / wrapLines prefix, suffix, strip, pattern, replacement), table header/separator cells, and precode template with %{lang}."
+      },
+      {
+        "path": "app/javascript/wiki_toolbar/textile.js",
+        "summary": "New. Textile syntax per button, table header cell, and precode template with %{lang}."
+      },
+      {
+        "path": "app/javascript/controllers/wiki_toolbar_controller.js",
+        "summary": "Adds format value and syntax lookup; apply(button), insertPrecode(lang) actions; table uses format syntax; wrapSelection/wrapLines take syntax; shortcut guard now requires exactly the platform modifier (no shift/alt/other modifier), matching the old Stimulus exact-modifier filters; menuParams removed."
+      },
+      {
+        "path": "config/importmap.rb",
+        "summary": "Pins app/javascript/wiki_toolbar so the controller can import the format syntax modules (verified in the expanded importmap)."
+      },
+      {
+        "path": "test/unit/lib/redmine/wiki_toolbar_test.rb",
+        "summary": "Updated for the new markup: apply/toggleMenu/help actions, shortcut attributes only on b/i/u, no syntax parameters, format value per formatter, single keyboard action set, insertPrecode language params, table menu."
+      },
+      {
+        "path": "test/integration/layout_test.rb",
+        "summary": "Precode menu assertion now checks insertPrecode action and lang param instead of the prefix param."
+      },
+      {
+        "path": "test/system/wiki_toolbar_test.rb",
+        "summary": "Added test_insert_highlighted_code_using_textile (not run: no Chrome available)."
+      }
+    ],
+    "acceptance": [
+      {
+        "criterion": "Toolbar renders the new contract for CommonMark and Textile (format value, apply/toggleMenu/help actions, button params, lang params on precode items, shortcut attributes only on strong/em/ins, exactly three keyboard actions, no syntax parameters)",
+        "met": true,
+        "evidence": "test/unit/lib/redmine/wiki_toolbar_test.rb: 12 runs, 91 assertions, 0 failures (includes test_common_mark_buttons, test_textile_buttons, test_buttons_should_not_contain_syntax_parameters, test_format_should_be_rendered_on_the_toolbar_for_common_mark/textile, test_keyboard_shortcuts, test_precode_menu_should_list_the_user_languages, test_table_menu)."
+      },
+      {
+        "criterion": "Toolbar behaves the same in the browser for both formatters (same buttons, inserted text, shortcuts, menus)",
+        "met": false,
+        "evidence": "Not verified in a browser: chromedriver/google-chrome are not installed so system tests cannot run. Substitute check: old controller at HEAD with the old Ruby parameters vs new controller with the new syntax tables, run under node on the same inputs: 2,033 comparisons (all 19 CM and 18 Textile buttons, 13 texts x 5 selections, precode for two languages, table sizes) with 0 differences. Shortcut guard checked on Mac and non-Mac modifier cases: 0 failures. Stimulus source confirms keydown.ctrl+b matches only when no other modifier is held, which the new guard reproduces."
+      },
+      {
+        "criterion": "The change is covered by tests",
+        "met": true,
+        "evidence": "Unit tests updated for the new markup; layout integration test updated for the precode lang param; added a Textile precode system test (written in the style of the existing CommonMark one, not executed here)."
+      },
+      {
+        "criterion": "The existing test suite still passes",
+        "met": false,
+        "evidence": "Passing: test/unit/lib/redmine/wiki_toolbar_test.rb, test/unit/lib/redmine/wiki_formatting*, test/integration/layout_test.rb (158 runs in one batch, 0 failures), and test/functional wiki/news/messages/issues controllers plus layout (652 runs, 0 failures, 3 skips, exit 0). Not run: the full unit/integration suite and all system tests (need Chrome)."
+      }
+    ],
+    "human_needed": [
+      {
+        "question": "Can you run the system tests (test/system/wiki_toolbar_test.rb and test/system/keyboard_shortcuts_test.rb) on a machine with Chrome and chromedriver? They are the only check of the toolbar in a real browser and were not run here.",
+        "why": "The environment has no Chrome/chromedriver, so button clicks, shortcuts and menus were verified only through a node harness and by reading the code."
+      }
+    ],
+    "harness_used": [
+      "Bash (ruby from /opt/homebrew/opt/ruby/bin, since the system ruby 2.6 cannot load the Gemfile.lock bundler 4.0.6)",
+      "Read/Grep/Glob for locating the toolbar code and tests",
+      "Scratch node harness in /tmp (removed afterwards) comparing HEAD controller against new controller",
+      "Stimulus gem source at /opt/homebrew/lib/ruby/gems/4.0.0/gems/stimulus-rails-1.3.4 to confirm keyboard modifier matching"
+    ],
+    "harness_gaps": [
+      {
+        "file": "CLAUDE.md",
+        "problem": "The global CLAUDE.md references @RTK.md, which is not in the repository; it was not used."
+      },
+      {
+        "file": "test/system",
+        "problem": "System tests need Chrome and chromedriver, which are not installed on this machine, so the browser behaviour cannot be checked by the test suite here."
+      },
+      {
+        "file": "app/javascript",
+        "problem": "No JavaScript unit-test runner (no jsdom, vitest or jest in package.json or node_modules), so the JS logic was checked only with an ad hoc node harness."
+      },
+      {
+        "file": "/usr/bin/ruby",
+        "problem": "The default system ruby (2.6) cannot run this Gemfile.lock (bundler 4.0.6); a Ruby 4 install at /opt/homebrew/opt/ruby/bin was needed. Not documented in the repo."
+      }
+    ]
+  }
+}

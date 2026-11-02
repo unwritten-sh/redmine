@@ -1,0 +1,35 @@
+{
+  "task": "redmine-3",
+  "arm": "control-haiku",
+  "applied": true,
+  "apply_error": "",
+  "hidden": {
+    "code": 0,
+    "tests": {
+      "ran": 137,
+      "skipped": 0,
+      "failed": 0
+    },
+    "seconds": 4,
+    "tail": ""
+  },
+  "full": {
+    "code": 0,
+    "tests": {
+      "ran": 6079,
+      "skipped": 37,
+      "failed": 0
+    },
+    "seconds": 65,
+    "tail": ""
+  },
+  "reference": {
+    "code": 0,
+    "tests": {
+      "ran": 6063,
+      "skipped": 64,
+      "failed": 0
+    }
+  },
+  "solved": true
+}

@@ -1,0 +1,703 @@
+diff --git a/app/javascript/controllers/wiki_toolbar_controller.js b/app/javascript/controllers/wiki_toolbar_controller.js
+index 0ed0e01e6..73fa0b673 100644
+--- a/app/javascript/controllers/wiki_toolbar_controller.js
++++ b/app/javascript/controllers/wiki_toolbar_controller.js
+@@ -7,15 +7,79 @@ import { Controller } from '@hotwired/stimulus'
+ 
+ const isMac = /mac|iphone|ipad/i.test(navigator.userAgentData?.platform || navigator.platform)
+ 
++// Inline syntax: encloses the selection with prefix and suffix
++const wrap = (prefix, suffix = prefix) => ({ type: 'wrap', prefix, suffix })
++
++// Block syntax: encloses the selected lines with prefix and suffix, after
++// removing the strip pattern from the selection and replacing the pattern
++// at the start of each line with the replacement
++const wrapLines = ({ prefix = '', suffix = '', strip, pattern, replacement = '' }) =>
++  ({ type: 'wrapLines', prefix, suffix, strip, pattern, replacement })
++
++// Syntax inserted by the toolbar buttons, by text formatter. The server only
++// renders the button names (see Redmine::WikiToolbar).
++//
++// * buttons: the syntax of each button that uses the apply action
++// * table: the header cell (with the column name) and the optional separator
++//   cell of the tables inserted by the table menu
++// * precode: the lines inserted around the selection by the precode menu
++export const formats = {
++  common_mark: {
++    buttons: {
++      strong: wrap('**'),
++      em: wrap('*'),
++      ins: wrap('<u>', '</u>'),
++      del: wrap('~~'),
++      code: wrap('`'),
++      h1: wrapLines({ prefix: '# ', strip: '^#+\\s+' }),
++      h2: wrapLines({ prefix: '## ', strip: '^#+\\s+' }),
++      h3: wrapLines({ prefix: '### ', strip: '^#+\\s+' }),
++      ul: wrapLines({ pattern: '[#-]?\\s*', replacement: '* ' }),
++      ol: wrapLines({ pattern: '[*-]?\\s*', replacement: '1. ' }),
++      tl: wrapLines({ pattern: '[*-]?\\s*', replacement: '* [ ] ' }),
++      bq: wrapLines({ pattern: '( *)([^\\n]*)', replacement: '> $2$3' }),
++      unbq: wrapLines({ pattern: ' *(> ?)?( *)([^\\n]*)', replacement: '$3$4' }),
++      pre: wrapLines({ prefix: '```\n', suffix: '\n```' }),
++      link: wrap('[[', ']]'),
++      img: wrap('![](', ')')
++    },
++    table: { headerCell: (name) => `${name} `, separatorCell: '--' },
++    precode: (lang) => wrapLines({ prefix: `\`\`\` ${lang}\n`, suffix: '\n```\n' })
++  },
++  textile: {
++    buttons: {
++      strong: wrap('*'),
++      em: wrap('_'),
++      ins: wrap('+'),
++      del: wrap('-'),
++      code: wrap('@'),
++      h1: wrapLines({ prefix: 'h1. ', strip: '^h\\d+\\.\\s+' }),
++      h2: wrapLines({ prefix: 'h2. ', strip: '^h\\d+\\.\\s+' }),
++      h3: wrapLines({ prefix: 'h3. ', strip: '^h\\d+\\.\\s+' }),
++      ul: wrapLines({ pattern: '[#-]?\\s*', replacement: '* ' }),
++      ol: wrapLines({ pattern: '[*-]?\\s*', replacement: '# ' }),
++      bq: wrapLines({ pattern: '( *)([^\\n]*)', replacement: '> $2$3' }),
++      unbq: wrapLines({ pattern: ' *(> ?)?( *)([^\\n]*)', replacement: '$3$4' }),
++      pre: wrapLines({ prefix: '<pre>\n', suffix: '\n</pre>' }),
++      link: wrap('[[', ']]'),
++      img: wrap('!')
++    },
++    table: { headerCell: (name) => `_.${name}` },
++    precode: (lang) => wrapLines({ prefix: `<pre><code class="${lang}">\n`, suffix: '\n</code></pre>\n' })
++  }
++}
++
+ // Wiki toolbar rendered by Redmine::WikiToolbar.
+ //
+ // The toolbar is rendered after the textarea and moves itself to the
+ // textarea's position on connect, so that existing views only need to call
+-// wikitoolbar_for. The text formatting syntax is given by the button
+-// parameters, so this controller is shared by all text formatters.
++// wikitoolbar_for. The server renders the buttons and gives the name of the
++// text formatter in the format value; the syntax that each button inserts
++// is defined above in formats.
+ export default class extends Controller {
+   static targets = ['editor', 'preview', 'editTab', 'previewTab', 'toolbar', 'precodeMenu', 'tableMenu']
+   static values = {
++    format: String,
+     fieldId: String,
+     previewUrl: String,
+     helpUrl: String
+@@ -45,30 +109,30 @@ export default class extends Controller {
+ 
+   // Actions
+ 
+-  wrap({ params: { prefix, suffix } }) {
+-    this.encloseSelection(String(prefix), String(suffix ?? prefix))
++  apply({ params: { button } }) {
++    const syntax = this.format?.buttons?.[button]
++    if (syntax) this.insert(syntax)
+   }
+ 
+-  wrapLines({ params: { prefix = '', suffix = '', strip, pattern, replacement = '' } }) {
+-    this.encloseLineSelection(String(prefix), String(suffix), (str) => {
+-      if (strip) {
+-        str = str.replace(new RegExp(strip), '')
+-      }
+-      if (pattern) {
+-        str = str.replace(/\r/g, '').replace(new RegExp(`(\\n|^)${pattern}`, 'g'), `$1${replacement}`)
+-      }
+-      return str
+-    })
++  insertPrecode({ params: { lang } }) {
++    const precode = this.format?.precode
++    if (precode) this.insert(precode(String(lang)))
+   }
+ 
+   help() {
+     window.open(this.helpUrlValue, '', 'resizable=yes, location=no, width=300, height=640, menubar=no, status=no, scrollbars=yes')
+   }
+ 
++  // Runs the button whose shortcut is the pressed key with Ctrl (Cmd on
++  // macOS) and no other modifier
+   shortcut(event) {
+-    if (event.target !== this.field || !(isMac ? event.metaKey : event.ctrlKey)) return
++    if (event.target !== this.field) return
++    const modifier = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
++    if (!modifier || event.altKey || event.shiftKey || !event.key) return
+ 
+-    const button = this.toolbarTarget.querySelector(`[data-wiki-toolbar-shortcut="${event.key.toLowerCase()}"]`)
++    const key = event.key.toLowerCase()
++    const button = [...this.toolbarTarget.querySelectorAll('[data-wiki-toolbar-shortcut]')]
++      .find((element) => element.dataset.wikiToolbarShortcut === key)
+     if (button) {
+       event.preventDefault()
+       button.click()
+@@ -127,7 +191,6 @@ export default class extends Controller {
+     const template = this[`${params.menu}MenuTarget`]
+     this.menu = template.content.firstElementChild.cloneNode(true)
+     this.menu.dataset.name = params.menu
+-    this.menuParams = params
+     this.element.append(this.menu)
+     this.positionMenu(currentTarget)
+ 
+@@ -148,14 +211,16 @@ export default class extends Controller {
+   }
+ 
+   insertTable({ params: { cols, rows } }) {
+-    const { headerCell, separatorCell } = this.menuParams
++    const table = this.format?.table
++    if (!table) return
++
+     const names = 'ABCDEFGHIJ'.slice(0, cols).split('')
+     const line = (cells) => `|${cells.join('|')}|\n`
+ 
+-    let table = line(names.map((name) => String(headerCell).replace('%{name}', name)))
+-    if (separatorCell) table += line(Array(cols).fill(separatorCell))
+-    table += line(Array(cols).fill('  ')).repeat(rows)
+-    this.encloseLineSelection(table, '')
++    let text = line(names.map((name) => table.headerCell(name)))
++    if (table.separatorCell) text += line(Array(cols).fill(table.separatorCell))
++    text += line(Array(cols).fill('  ')).repeat(rows)
++    this.encloseLineSelection(text, '')
+   }
+ 
+   highlightTable({ target }) {
+@@ -172,6 +237,26 @@ export default class extends Controller {
+ 
+   // Private
+ 
++  get format() {
++    return formats[this.formatValue]
++  }
++
++  insert({ type, prefix, suffix, strip, pattern, replacement }) {
++    if (type === 'wrap') {
++      this.encloseSelection(prefix, suffix)
++      return
++    }
++    this.encloseLineSelection(prefix, suffix, (str) => {
++      if (strip) {
++        str = str.replace(new RegExp(strip), '')
++      }
++      if (pattern) {
++        str = str.replace(/\r/g, '').replace(new RegExp(`(\\n|^)${pattern}`, 'g'), `$1${replacement}`)
++      }
++      return str
++    })
++  }
++
+   get previewing() {
+     return this.previewTabTarget.classList.contains('selected')
+   }
+diff --git a/docs/harness/log.md b/docs/harness/log.md
+index 1b09cc68d..6d20deffe 100644
+--- a/docs/harness/log.md
++++ b/docs/harness/log.md
+@@ -110,3 +110,11 @@ Risks seen before the harness:
+ - full-gate: Left out of bin/harness check: system tests (bin/harness test-system, need Chrome and a Mermaid.js download), the Bazaar non-ASCII test (needs the en_US.ISO8859-1 locale), bundle audit (needs network), and the PostgreSQL/MySQL and Ruby 3.3/3.4 matrix. The upstream workflows tests.yml and linters.yml still run all of them.
+ - ci: The uw-harness package is not published on npm (npx -y uw-harness returned 404 here), so the new harness.yml workflow will fail until it is published. The gates were checked with the local build of uw-harness (check passes) and run directly from a clean shell.
+ - deploy-explicit: Without human answers, docs/deploy.md and docs/observability.md keep open TODO blocks, so these two checks stay partial.
++
++## 2026-11-01: wiki toolbar syntax moved to the browser (#43259)
++
++What changed: the server no longer renders the syntax of the wiki toolbar buttons. `Redmine::WikiToolbar` subclasses only give `format_name` (`common_mark` or `textile`) and `groups` of button names; the base class renders spacers between groups, `data-wiki-toolbar-format-value` on the root, `wiki-toolbar#apply` with `data-wiki-toolbar-button-param` for normal buttons, `toggleMenu` for `table` and `precode`, `insertPrecode` with `data-wiki-toolbar-lang-param` for each language, and one generic `keydown->wiki-toolbar#shortcut` action. Shortcut keys (b, i, u) are in `Redmine::WikiToolbar::SHORTCUTS`. The syntax of each format (buttons, table cells, code block) is the exported `formats` object in `app/javascript/controllers/wiki_toolbar_controller.js`.
++
++What I learned: Stimulus key filters such as `keydown.ctrl+b` require the exact set of modifiers, so the generic `shortcut` action checks itself that only Ctrl (Cmd on macOS) is pressed, to keep the old behavior (Ctrl+Shift+B does nothing). `bin/rails` uses the macOS system Ruby 2.6 unless PATH contains the Homebrew Ruby; `bin/harness` fixes PATH only for its own tasks. The `frontend-stimulus` skill mentions `app/javascript/wiki_formatting/`, which does not exist.
++
++What is left: a plugin text formatter that uses the toolbar must now add its syntax to `formats` in JavaScript; there is no documented extension point for that yet. The system tests (`test/system/wiki_toolbar_test.rb`, `test/system/keyboard_shortcuts_test.rb`) pass locally with headless Chrome, but `bin/harness check` does not run them.
+diff --git a/lib/redmine/wiki_formatting/common_mark/helper.rb b/lib/redmine/wiki_formatting/common_mark/helper.rb
+index 018d14299..441b2452c 100644
+--- a/lib/redmine/wiki_formatting/common_mark/helper.rb
++++ b/lib/redmine/wiki_formatting/common_mark/helper.rb
+@@ -33,32 +33,18 @@ module Redmine
+       end
+ 
+       class WikiToolbar < Redmine::WikiToolbar
+-        def buttons
++        def format_name
++          'common_mark'
++        end
++
++        def groups
+           [
+-            {name: 'strong', action: 'wrap', prefix: '**', shortcut: 'b'},
+-            {name: 'em', action: 'wrap', prefix: '*', shortcut: 'i'},
+-            {name: 'ins', action: 'wrap', prefix: '<u>', suffix: '</u>', shortcut: 'u'},
+-            {name: 'del', action: 'wrap', prefix: '~~'},
+-            {name: 'code', action: 'wrap', prefix: '`'},
+-            SPACER,
+-            {name: 'h1', action: 'wrapLines', prefix: '# ', strip: '^#+\s+'},
+-            {name: 'h2', action: 'wrapLines', prefix: '## ', strip: '^#+\s+'},
+-            {name: 'h3', action: 'wrapLines', prefix: '### ', strip: '^#+\s+'},
+-            SPACER,
+-            {name: 'ul', action: 'wrapLines', pattern: '[#-]?\s*', replacement: '* '},
+-            {name: 'ol', action: 'wrapLines', pattern: '[*-]?\s*', replacement: '1. '},
+-            {name: 'tl', action: 'wrapLines', pattern: '[*-]?\s*', replacement: '* [ ] '},
+-            SPACER,
+-            {name: 'bq', action: 'wrapLines', pattern: '( *)([^\n]*)', replacement: '> $2$3'},
+-            {name: 'unbq', action: 'wrapLines', pattern: ' *(> ?)?( *)([^\n]*)', replacement: '$3$4'},
+-            {name: 'table', menu: :table, header_cell: '%{name} ', separator_cell: '--'},
+-            {name: 'pre', action: 'wrapLines', prefix: "```\n", suffix: "\n```"},
+-            {name: 'precode', menu: :precode, prefix: "``` %{lang}\n", suffix: "\n```\n"},
+-            SPACER,
+-            {name: 'link', action: 'wrap', prefix: '[[', suffix: ']]'},
+-            {name: 'img', action: 'wrap', prefix: '![](', suffix: ')'},
+-            SPACER,
+-            {name: 'help', action: 'help'}
++            %w[strong em ins del code],
++            %w[h1 h2 h3],
++            %w[ul ol tl],
++            %w[bq unbq table pre precode],
++            %w[link img],
++            %w[help]
+           ]
+         end
+       end
+diff --git a/lib/redmine/wiki_formatting/textile/helper.rb b/lib/redmine/wiki_formatting/textile/helper.rb
+index 57159ba93..d2361782e 100644
+--- a/lib/redmine/wiki_formatting/textile/helper.rb
++++ b/lib/redmine/wiki_formatting/textile/helper.rb
+@@ -33,31 +33,18 @@ module Redmine
+       end
+ 
+       class WikiToolbar < Redmine::WikiToolbar
+-        def buttons
++        def format_name
++          'textile'
++        end
++
++        def groups
+           [
+-            {name: 'strong', action: 'wrap', prefix: '*', shortcut: 'b'},
+-            {name: 'em', action: 'wrap', prefix: '_', shortcut: 'i'},
+-            {name: 'ins', action: 'wrap', prefix: '+', shortcut: 'u'},
+-            {name: 'del', action: 'wrap', prefix: '-'},
+-            {name: 'code', action: 'wrap', prefix: '@'},
+-            SPACER,
+-            {name: 'h1', action: 'wrapLines', prefix: 'h1. ', strip: '^h\d+\.\s+'},
+-            {name: 'h2', action: 'wrapLines', prefix: 'h2. ', strip: '^h\d+\.\s+'},
+-            {name: 'h3', action: 'wrapLines', prefix: 'h3. ', strip: '^h\d+\.\s+'},
+-            SPACER,
+-            {name: 'ul', action: 'wrapLines', pattern: '[#-]?\s*', replacement: '* '},
+-            {name: 'ol', action: 'wrapLines', pattern: '[*-]?\s*', replacement: '# '},
+-            SPACER,
+-            {name: 'bq', action: 'wrapLines', pattern: '( *)([^\n]*)', replacement: '> $2$3'},
+-            {name: 'unbq', action: 'wrapLines', pattern: ' *(> ?)?( *)([^\n]*)', replacement: '$3$4'},
+-            {name: 'table', menu: :table, header_cell: '_.%{name}'},
+-            {name: 'pre', action: 'wrapLines', prefix: "<pre>\n", suffix: "\n</pre>"},
+-            {name: 'precode', menu: :precode, prefix: "<pre><code class=\"%{lang}\">\n", suffix: "\n</code></pre>\n"},
+-            SPACER,
+-            {name: 'link', action: 'wrap', prefix: '[[', suffix: ']]'},
+-            {name: 'img', action: 'wrap', prefix: '!', suffix: '!'},
+-            SPACER,
+-            {name: 'help', action: 'help'}
++            %w[strong em ins del code],
++            %w[h1 h2 h3],
++            %w[ul ol],
++            %w[bq unbq table pre precode],
++            %w[link img],
++            %w[help]
+           ]
+         end
+       end
+diff --git a/lib/redmine/wiki_toolbar.rb b/lib/redmine/wiki_toolbar.rb
+index 1fd4c9faf..078571621 100644
+--- a/lib/redmine/wiki_toolbar.rb
++++ b/lib/redmine/wiki_toolbar.rb
+@@ -20,18 +20,14 @@
+ module Redmine
+   # Renders the wiki toolbar handled by the wiki-toolbar Stimulus controller.
+   #
+-  # Text formatters subclass it and describe their buttons in #buttons. Each
+-  # button is a Hash with:
+-  # * :name - the button name, used for the "jstb_<name>" CSS class
+-  # * :action - the controller action: wrap, wrapLines or help
+-  # * :menu - :precode or :table, opens a menu instead of running an action
+-  # * :shortcut - optional key used with Ctrl (Cmd on macOS)
+-  # * any other key is passed to the action as a Stimulus action parameter
++  # Text formatters subclass it and only describe which buttons exist:
++  # * #format_name - the name of the text formatter, given to the controller
++  #   in the format value
++  # * #groups - the groups of button names, separated by spacers
+   #
+-  # Use SPACER to separate groups of buttons.
++  # The syntax inserted by each button is defined for each text formatter in
++  # app/javascript/controllers/wiki_toolbar_controller.js.
+   class WikiToolbar
+-    SPACER = :spacer
+-
+     LABELS = {
+       'strong' => :label_wiki_toolbar_strong,
+       'em' => :label_wiki_toolbar_italic,
+@@ -54,11 +50,17 @@ module Redmine
+       'help' => :label_wiki_toolbar_help
+     }.freeze
+ 
+-    BUTTON_KEYS = [:name, :action, :menu, :shortcut, :label].freeze
+-    # Button options used to render the menu instead of being action parameters
+-    MENU_KEYS = {precode: [:prefix, :suffix]}.freeze
++    # Buttons that open a menu instead of running an action
++    MENUS = %w[table precode].freeze
++    # Keys used with Ctrl (Cmd on macOS) to run a button
++    SHORTCUTS = {'strong' => 'b', 'em' => 'i', 'ins' => 'u'}.freeze
+     TABLE_MENU_ROWS = 5
+     TABLE_MENU_COLS = 10
++    KEYBOARD_ACTIONS = [
++      'keydown->wiki-toolbar#shortcut',
++      'keydown.ctrl+shift+p@window->wiki-toolbar#togglePreview',
++      'keydown.meta+shift+p@window->wiki-toolbar#togglePreview'
++    ].join(' ').freeze
+ 
+     # Helper methods shared by the text formatters that use the toolbar
+     module Helper
+@@ -81,7 +83,11 @@ module Redmine
+       @view = view
+     end
+ 
+-    def buttons
++    def format_name
++      nil
++    end
++
++    def groups
+       []
+     end
+ 
+@@ -89,7 +95,8 @@ module Redmine
+       tag.div(class: 'jstBlock', hidden: true,
+               data: {
+                 controller: 'wiki-toolbar',
+-                action: keyboard_actions,
++                action: KEYBOARD_ACTIONS,
++                wiki_toolbar_format_value: format_name,
+                 wiki_toolbar_field_id_value: field_id,
+                 wiki_toolbar_preview_url_value: preview_url,
+                 wiki_toolbar_help_url_value: @view.help_wiki_syntax_path
+@@ -132,38 +139,39 @@ module Redmine
+     end
+ 
+     def rendered_buttons
+-      @rendered_buttons ||= @view.safe_join(buttons.map {|button| render_button(button)})
++      @rendered_buttons ||= begin
++        items = groups.each_with_index.flat_map do |names, index|
++          spacer = index > 0 ? [tag.span(" ", class: 'jstSpacer')] : []
++          spacer + names.map {|name| render_button(name)}
++        end
++        @view.safe_join(items)
++      end
+     end
+ 
+-    def render_button(button)
+-      return tag.span(" ", class: 'jstSpacer') if button == SPACER
++    def menu_buttons
++      groups.flatten & MENUS
++    end
+ 
+-      name = button[:name]
+-      title = l(button[:label] || LABELS.fetch(name))
+-      data = button_params(button)
+-      if button[:menu]
+-        data[:action] = 'wiki-toolbar#toggleMenu'
+-        data[:wiki_toolbar_menu_param] = button[:menu]
+-      else
+-        data[:action] = "wiki-toolbar##{button[:action]}"
+-      end
+-      data[:wiki_toolbar_shortcut] = button[:shortcut] if button[:shortcut]
++    def render_button(name)
++      title = l(LABELS.fetch(name))
++      data =
++        if MENUS.include?(name)
++          {action: 'wiki-toolbar#toggleMenu', wiki_toolbar_menu_param: name}
++        elsif name == 'help'
++          {action: 'wiki-toolbar#help'}
++        else
++          {action: 'wiki-toolbar#apply', wiki_toolbar_button_param: name}
++        end
++      data[:wiki_toolbar_shortcut] = SHORTCUTS[name] if SHORTCUTS[name]
+ 
+       tag.button(tag.span(title), type: 'button', class: "jstb_#{name}", title: title, tabindex: 200, data: data)
+     end
+ 
+-    # Converts the button options to Stimulus action parameters
+-    def button_params(button)
+-      button.except(*BUTTON_KEYS, *MENU_KEYS[button[:menu]]).transform_keys {|key| :"wiki_toolbar_#{key}_param"}
+-    end
+-
+     def menus
+       @menus ||= begin
+-        templates = buttons.filter_map do |button|
+-          next unless button.is_a?(Hash) && button[:menu]
+-
+-          tag.template(data: {wiki_toolbar_target: "#{button[:menu]}Menu"}) do
+-            send(:"#{button[:menu]}_menu", button)
++        templates = menu_buttons.map do |menu|
++          tag.template(data: {wiki_toolbar_target: "#{menu}Menu"}) do
++            send(:"#{menu}_menu")
+           end
+         end
+         @view.safe_join(templates)
+@@ -171,9 +179,8 @@ module Redmine
+     end
+ 
+     # Lists the languages for code highlighting. Each item wraps the selected
+-    # lines using the :prefix and :suffix of the button, where %{lang} is
+-    # replaced by the language.
+-    def precode_menu(button)
++    # lines with the code block syntax of the text formatter for the language.
++    def precode_menu
+       tag.ul(class: 'jstMenu', role: 'menu',
+              data: {action: 'click->wiki-toolbar#closeMenu keydown.esc->wiki-toolbar#closeMenu'}) do
+         @view.safe_join(
+@@ -181,9 +188,8 @@ module Redmine
+             tag.li(role: 'none') do
+               tag.button(lang, type: 'button', role: 'menuitem',
+                          data: {
+-                           action: 'wiki-toolbar#wrapLines',
+-                           wiki_toolbar_prefix_param: format(button[:prefix], lang: lang),
+-                           wiki_toolbar_suffix_param: format(button[:suffix], lang: lang)
++                           action: 'wiki-toolbar#insertPrecode',
++                           wiki_toolbar_lang_param: lang
+                          })
+             end
+           end
+@@ -191,7 +197,7 @@ module Redmine
+       end
+     end
+ 
+-    def table_menu(_button)
++    def table_menu
+       tag.table(class: 'table-generator', role: 'grid',
+                 data: {
+                   action: 'click->wiki-toolbar#closeMenu keydown.esc->wiki-toolbar#closeMenu ' \
+@@ -221,16 +227,5 @@ module Redmine
+     def code_languages
+       User.current.pref.toolbar_language_options.to_s.split(',')
+     end
+-
+-    def keyboard_actions
+-      @keyboard_actions ||= begin
+-        keys = buttons.filter_map {|button| button[:shortcut] if button.is_a?(Hash)}
+-        actions = keys.flat_map do |key|
+-          %w[ctrl meta].map {|modifier| "keydown.#{modifier}+#{key}->wiki-toolbar#shortcut"}
+-        end
+-        actions += %w[ctrl meta].map {|modifier| "keydown.#{modifier}+shift+p@window->wiki-toolbar#togglePreview"}
+-        actions.join(' ')
+-      end
+-    end
+   end
+ end
+diff --git a/test/integration/layout_test.rb b/test/integration/layout_test.rb
+index b333e1249..79b4152f1 100644
+--- a/test/integration/layout_test.rb
++++ b/test/integration/layout_test.rb
+@@ -62,7 +62,7 @@ class LayoutTest < Redmine::IntegrationTest
+     assert_include "var wikiImageMimeTypes = #{Redmine::MimeType.by_type('image').to_json};", response.body
+     assert_select 'div.jstBlock[data-wiki-toolbar-field-id-value=issue_description]' do
+       UserPreference::DEFAULT_TOOLBAR_LANGUAGE_OPTIONS.each do |lang|
+-        assert_select 'template[data-wiki-toolbar-target=precodeMenu]', :html => /data-wiki-toolbar-prefix-param="``` #{lang}/
++        assert_select 'template[data-wiki-toolbar-target=precodeMenu]', :html => /data-wiki-toolbar-lang-param="#{lang}"/
+       end
+     end
+   end
+diff --git a/test/system/keyboard_shortcuts_test.rb b/test/system/keyboard_shortcuts_test.rb
+index 51772d678..2881c1ccb 100644
+--- a/test/system/keyboard_shortcuts_test.rb
++++ b/test/system/keyboard_shortcuts_test.rb
+@@ -103,6 +103,18 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
+     end
+   end
+ 
++  def test_keyboard_shortcuts_for_wiki_toolbar_buttons_should_ignore_other_modifiers
++    with_settings :text_formatting => 'common_mark' do
++      log_user('jsmith', 'jsmith')
++      visit 'issues/new'
++
++      find('#issue_description').click.send_keys([modifier_key, :shift, 'b'])
++      assert_equal '', find('#issue_description').value
++      find('#issue_description').send_keys([modifier_key, 'd'])
++      assert_equal '', find('#issue_description').value
++    end
++  end
++
+   def test_keyboard_shortcuts_keys_should_be_shown_in_button_title
+     log_user('jsmith', 'jsmith')
+     visit 'issues/new'
+diff --git a/test/system/wiki_toolbar_test.rb b/test/system/wiki_toolbar_test.rb
+index ce6dfc521..bb7afb032 100644
+--- a/test/system/wiki_toolbar_test.rb
++++ b/test/system/wiki_toolbar_test.rb
+@@ -115,6 +115,50 @@ class WikiToolbarTest < ApplicationSystemTestCase
+     end
+   end
+ 
++  def test_insert_highlighted_code_using_textile
++    with_settings :text_formatting => 'textile' do
++      log_user('jsmith', 'jsmith')
++      visit '/projects/ecookbook/issues/new'
++
++      fill_in 'Description', :with => 'puts 1'
++      find('button.jstb_precode').click
++      within('ul.jstMenu') {click_button 'ruby'}
++      assert_equal %(<pre><code class="ruby">\nputs 1\n</code></pre>\n), find('#issue_description').value
++    end
++  end
++
++  def test_buttons_should_insert_the_syntax_of_the_text_formatter
++    log_user('jsmith', 'jsmith')
++    {
++      'common_mark' => {
++        'strong' => '**text**', 'em' => '*text*', 'ins' => '<u>text</u>', 'del' => '~~text~~',
++        'code' => '`text`', 'h1' => '# text', 'h2' => '## text', 'h3' => '### text',
++        'ul' => '* text', 'ol' => '1. text', 'tl' => '* [ ] text', 'bq' => '> text',
++        'pre' => "```\ntext\n```", 'link' => '[[text]]', 'img' => '![](text)'
++      },
++      'textile' => {
++        'strong' => '*text*', 'em' => '_text_', 'ins' => '+text+', 'del' => '-text-',
++        'code' => '@text@', 'h1' => 'h1. text', 'h2' => 'h2. text', 'h3' => 'h3. text',
++        'ul' => '* text', 'ol' => '# text', 'bq' => '> text',
++        'pre' => "<pre>\ntext\n</pre>", 'link' => '[[text]]', 'img' => '!text!'
++      }
++    }.each do |formatting, expected|
++      with_settings :text_formatting => formatting do
++        visit '/projects/ecookbook/issues/new'
++
++        expected.each do |button, value|
++          fill_in 'Description', :with => 'text'
++          select_text 'issue_description', 0, 4
++          find("button.jstb_#{button}").click
++          assert_equal value, find('#issue_description').value, "#{formatting} #{button}"
++        end
++        fill_in 'Description', :with => 'h2. text'
++        find('button.jstb_h1').click
++        assert_equal(formatting == 'textile' ? 'h1. text' : '# h2. text', find('#issue_description').value)
++      end
++    end
++  end
++
+   def test_menus_should_close_with_escape_outside_click_or_toggle
+     log_user('jsmith', 'jsmith')
+     visit '/projects/ecookbook/issues/new'
+diff --git a/test/unit/lib/redmine/wiki_toolbar_test.rb b/test/unit/lib/redmine/wiki_toolbar_test.rb
+index 830c3fb22..81d9b5ac7 100644
+--- a/test/unit/lib/redmine/wiki_toolbar_test.rb
++++ b/test/unit/lib/redmine/wiki_toolbar_test.rb
+@@ -50,20 +50,20 @@ class Redmine::WikiToolbarTest < Redmine::HelperTest
+     with_settings :text_formatting => 'common_mark' do
+       html = wikitoolbar_for('issue_description')
+ 
++      assert_select_in html, 'div.jstBlock[data-wiki-toolbar-format-value=?]', 'common_mark'
+       assert_select_in html, 'div.jstElements' do
+         assert_select 'button', 19
+         assert_select 'span.jstSpacer', 5
+-        assert_select 'button.jstb_strong[title=?][data-action=?][data-wiki-toolbar-prefix-param=?][data-wiki-toolbar-shortcut=b]',
+-                      'Strong', 'wiki-toolbar#wrap', '**'
+-        assert_select 'button.jstb_ins[data-wiki-toolbar-prefix-param=?][data-wiki-toolbar-suffix-param=?]', '<u>', '</u>'
+-        assert_select 'button.jstb_h1[data-action=?][data-wiki-toolbar-prefix-param=?][data-wiki-toolbar-strip-param=?]',
+-                      'wiki-toolbar#wrapLines', '# ', '^#+\s+'
+-        assert_select 'button.jstb_tl[data-wiki-toolbar-replacement-param=?]', '* [ ] '
+-        assert_select 'button.jstb_table[data-action=?][data-wiki-toolbar-menu-param=table][data-wiki-toolbar-separator-cell-param=?]',
+-                      'wiki-toolbar#toggleMenu', '--'
+-        assert_select 'button.jstb_precode[data-wiki-toolbar-menu-param=precode]:not([data-wiki-toolbar-prefix-param])'
+-        assert_select 'button.jstb_help[data-action=?]', 'wiki-toolbar#help'
++        assert_select 'button.jstb_strong[title=?][data-action=?][data-wiki-toolbar-button-param=?][data-wiki-toolbar-shortcut=b]',
++                      'Strong', 'wiki-toolbar#apply', 'strong'
++        assert_select 'button.jstb_tl[data-action=?][data-wiki-toolbar-button-param=?]', 'wiki-toolbar#apply', 'tl'
++        assert_select 'button.jstb_table[data-action=?][data-wiki-toolbar-menu-param=table]:not([data-wiki-toolbar-button-param])',
++                      'wiki-toolbar#toggleMenu'
++        assert_select 'button.jstb_precode[data-action=?][data-wiki-toolbar-menu-param=precode]', 'wiki-toolbar#toggleMenu'
++        assert_select 'button.jstb_help[data-action=?]:not([data-wiki-toolbar-button-param])', 'wiki-toolbar#help'
+       end
++      assert_equal %w[strong em ins del code | h1 h2 h3 | ul ol tl | bq unbq table pre precode | link img | help],
++                   toolbar_items(html)
+     end
+   end
+ 
+@@ -71,12 +71,27 @@ class Redmine::WikiToolbarTest < Redmine::HelperTest
+     with_settings :text_formatting => 'textile' do
+       html = wikitoolbar_for('issue_description')
+ 
++      assert_select_in html, 'div.jstBlock[data-wiki-toolbar-format-value=?]', 'textile'
+       assert_select_in html, 'div.jstElements' do
+         assert_select 'button', 18
++        assert_select 'span.jstSpacer', 5
+         assert_select 'button.jstb_tl', 0
+-        assert_select 'button.jstb_strong[data-wiki-toolbar-prefix-param=?]', '*'
+-        assert_select 'button.jstb_ol[data-wiki-toolbar-replacement-param=?]', '# '
+-        assert_select 'button.jstb_table[data-wiki-toolbar-header-cell-param=?]:not([data-wiki-toolbar-separator-cell-param])', '_.%{name}'
++        assert_select 'button.jstb_strong[data-action=?][data-wiki-toolbar-button-param=?]', 'wiki-toolbar#apply', 'strong'
++      end
++      assert_equal %w[strong em ins del code | h1 h2 h3 | ul ol | bq unbq table pre precode | link img | help],
++                   toolbar_items(html)
++    end
++  end
++
++  def test_buttons_should_not_carry_the_syntax
++    params = %w[prefix suffix strip pattern replacement header-cell separator-cell]
++    %w[common_mark textile].each do |formatting|
++      with_settings :text_formatting => formatting do
++        html = wikitoolbar_for('issue_description')
++
++        params.each do |param|
++          assert_not_include "data-wiki-toolbar-#{param}-param", html
++        end
+       end
+     end
+   end
+@@ -92,16 +107,20 @@ class Redmine::WikiToolbarTest < Redmine::HelperTest
+   end
+ 
+   def test_keyboard_shortcuts
+-    with_settings :text_formatting => 'common_mark' do
+-      html = wikitoolbar_for('issue_description')
+-      actions = Nokogiri::HTML.fragment(html).at_css('div.jstBlock')['data-action'].split
+-
+-      %w[b i u].each do |key|
+-        assert_include "keydown.ctrl+#{key}->wiki-toolbar#shortcut", actions
+-        assert_include "keydown.meta+#{key}->wiki-toolbar#shortcut", actions
++    %w[common_mark textile].each do |formatting|
++      with_settings :text_formatting => formatting do
++        html = wikitoolbar_for('issue_description')
++        fragment = Nokogiri::HTML.fragment(html)
++
++        assert_equal ['keydown->wiki-toolbar#shortcut',
++                      'keydown.ctrl+shift+p@window->wiki-toolbar#togglePreview',
++                      'keydown.meta+shift+p@window->wiki-toolbar#togglePreview'],
++                     fragment.at_css('div.jstBlock')['data-action'].split
++        shortcuts = fragment.css('[data-wiki-toolbar-shortcut]').to_h do |button|
++          [button['class'], button['data-wiki-toolbar-shortcut']]
++        end
++        assert_equal({'jstb_strong' => 'b', 'jstb_em' => 'i', 'jstb_ins' => 'u'}, shortcuts)
+       end
+-      assert_include 'keydown.ctrl+shift+p@window->wiki-toolbar#togglePreview', actions
+-      assert_include 'keydown.meta+shift+p@window->wiki-toolbar#togglePreview', actions
+     end
+   end
+ 
+@@ -113,12 +132,13 @@ class Redmine::WikiToolbarTest < Redmine::HelperTest
+       html = wikitoolbar_for('issue_description')
+ 
+       assert_select_in html, 'template[data-wiki-toolbar-target=precodeMenu] ul.jstMenu[role=menu]' do
+-        assert_select 'button[role=menuitem][data-action=?]', 'wiki-toolbar#wrapLines', :count => 2
++        assert_select 'button[role=menuitem][data-action=?]', 'wiki-toolbar#insertPrecode', :count => 2
+       end
+       item = Nokogiri::HTML.fragment(html).at_css('ul.jstMenu button')
+       assert_equal 'ruby', item.text
+-      assert_equal %(<pre><code class="ruby">\n), item['data-wiki-toolbar-prefix-param']
+-      assert_equal "\n</code></pre>\n", item['data-wiki-toolbar-suffix-param']
++      assert_equal 'ruby', item['data-wiki-toolbar-lang-param']
++      assert_nil item['data-wiki-toolbar-prefix-param']
++      assert_nil item['data-wiki-toolbar-suffix-param']
+     end
+   end
+ 
+@@ -146,4 +166,13 @@ class Redmine::WikiToolbarTest < Redmine::HelperTest
+       assert_not_include 'jstoolbar', header_tags
+     end
+   end
++
++  private
++
++  # Returns the button names of the toolbar, with "|" for the spacers
++  def toolbar_items(html)
++    Nokogiri::HTML.fragment(html).css('div.jstElements > *').map do |item|
++      item.name == 'span' ? '|' : item['class'].delete_prefix('jstb_')
++    end
++  end
+ end

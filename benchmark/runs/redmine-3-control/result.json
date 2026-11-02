@@ -1,0 +1,65 @@
+{
+  "task": "redmine-3",
+  "arm": "control",
+  "start": "ef37b625cea030e8601b7062c08e772e11d0b68e",
+  "seconds": 289,
+  "result": {
+    "status": "done",
+    "summary": "Fixed Redmine #44623. Headings that come from a macro's output no longer get \"Edit this section\" links and no longer count as sections of the page. The exception is a macro defined with the new `:sections => true` option. Only `collapse` uses it, so headings written inside a collapse block keep their links. How it works: when a macro without `:sections` returns headings, `inject_macros` wraps its output in HTML comment markers. `parse_sections` keeps a nesting depth from these markers and skips headings inside them. A `@macro_depth` counter keeps the markers in place during nested `textilizable` calls, so an include inside a collapse is still detected. The markers are removed at the end of the outermost `textilizable` call. Included headings are still rendered normally: they keep their anchors and still appear in the TOC. Tests: the full suite passes (6066 runs, 0 failures, 0 errors, 64 skips; the skips are for SCM repositories, LDAP and ImageMagick, which are not set up here). I could not run the new tests against the code without the fix: my command to revert the fix temporarily was denied. So I did not see them fail on the old code.",
+    "changes": [
+      {
+        "path": "app/helpers/application_helper.rb",
+        "summary": "New marker constants and SECTION_HEADING_RE. parse_sections skips headings between markers. inject_macros wraps the output of non-:sections macros that contain headings, and tracks @macro_depth. textilizable removes the markers at the top level (new remove_macro_section_markers method)."
+      },
+      {
+        "path": "lib/redmine/wiki_formatting/macros.rb",
+        "summary": "New :sections macro option (accepted by assert_valid_keys and documented), new macro_sections? helper, and collapse is now declared with :sections => true."
+      },
+      {
+        "path": "test/helpers/application_helper_test.rb",
+        "summary": "3 new tests: include macro between local headings (edit links, section numbers checked against formatter.get_section, included headings still have anchors, no marker left in the output), include inside collapse, and custom macros with and without :sections."
+      },
+      {
+        "path": "test/unit/lib/redmine/wiki_formatting/macros_test.rb",
+        "summary": "New test for registering a macro with the :sections option and for macro_sections? (collapse, include, unknown macro)."
+      }
+    ],
+    "acceptance": [
+      {
+        "criterion": "On a page with local headings and an included page, only the local headings get edit links, and their section numbers match the numbers used when editing the page",
+        "met": true,
+        "evidence": "test_section_edit_links_with_include_macro passes: exactly 2 section divs (section-2 for Section A, section-3 for Section B), the included headings have no edit links but still have anchors, and Redmine::WikiFormatting.formatter#get_section(2) and get_section(3) return Section A and Section B."
+      },
+      {
+        "criterion": "The change is covered by tests",
+        "met": true,
+        "evidence": "4 new tests (3 in application_helper_test.rb, 1 in macros_test.rb); both files pass: 194 runs, 0 failures. Not checked: that the new tests fail without the fix, because the temporary revert command was denied."
+      },
+      {
+        "criterion": "The existing test suite still passes",
+        "met": true,
+        "evidence": "bin/rails test: 6066 runs, 31675 assertions, 0 failures, 0 errors, 64 skips (SCM repositories, LDAP and ImageMagick are not set up)."
+      }
+    ],
+    "human_needed": [],
+    "harness_used": [
+      "config/database.yml already set up for SQLite with a comment that refers to 'bin/harness setup'",
+      "Existing test test_section_edit_links_with_collapse_macro in test/helpers/application_helper_test.rb, used as a model for the new tests",
+      "doc/RUNNING_TESTS (referenced in the test output)"
+    ],
+    "harness_gaps": [
+      {
+        "file": "bin/harness",
+        "problem": "config/database.yml says it was written by 'bin/harness setup', but bin/harness does not exist in the tree."
+      },
+      {
+        "file": ".ruby-version",
+        "problem": "No Ruby version file or version manager setup. bin/rails picks the macOS system Ruby 2.6 by default, which fails with Bundler 4. I had to put /opt/homebrew/opt/ruby/bin first in PATH by hand."
+      },
+      {
+        "file": null,
+        "problem": "No agent instructions file (CLAUDE.md or AGENTS.md) explaining how to run tests in this tree."
+      }
+    ]
+  }
+}

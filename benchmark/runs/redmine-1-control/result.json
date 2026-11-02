@@ -1,0 +1,94 @@
+{
+  "task": "redmine-1",
+  "arm": "control",
+  "start": "74626bcbb383a575e8fff458ae4ecb5794b0c64b",
+  "seconds": 400,
+  "result": {
+    "status": "done",
+    "summary": "The syntax for each toolbar button now lives in JavaScript, and the server only sends the button names and how they are grouped. New files app/javascript/wiki_formatting/common_mark.js and textile.js define what each button inserts, plus the table cells and the code block for each precode language. The wiki-toolbar Stimulus controller picks the right file from the new `data-wiki-toolbar-format-value` attribute. It has new `apply` and `insertPrecode` actions and gets the table text from the format file. Its `shortcut` action now checks the modifier keys exactly as the old Stimulus key filters did (only Ctrl, or only Cmd on macOS, with no Shift or Alt). On the Ruby side, each formatter only gives `format` and `button_groups`. Redmine::WikiToolbar renders spacers between groups, gives the table and precode buttons their menus, the help button `wiki-toolbar#help`, the b/i/u shortcuts to strong/em/ins, and the three keyboard actions on the toolbar root. Results: the full `bin/rails test` suite passes (6064 runs, 0 failures, 0 errors, 64 skips for the Mercurial, Subversion and LDAP setups that are not installed). The toolbar browser tests pass (wiki_toolbar_test and keyboard_shortcuts_test, 17 runs, 0 failures). RuboCop reports no offenses on the changed Ruby files. I did not run the rest of the system test suite. Nothing was committed.",
+    "changes": [
+      {
+        "path": "app/javascript/wiki_formatting/common_mark.js",
+        "summary": "New: what each CommonMark button inserts (wrap or wrapLines, with prefix, suffix, strip and replace), the table header and separator cells, and the precode prefix and suffix for a language."
+      },
+      {
+        "path": "app/javascript/wiki_formatting/textile.js",
+        "summary": "New: the same definitions for Textile, with comments that describe the options."
+      },
+      {
+        "path": "config/importmap.rb",
+        "summary": "Added pin_all_from for app/javascript/wiki_formatting."
+      },
+      {
+        "path": "app/javascript/controllers/wiki_toolbar_controller.js",
+        "summary": "Added the format value and a static formats registry. Replaced the wrap and wrapLines actions with apply({button}). Added insertPrecode({lang}). insertTable now reads the format's table cells. The shortcut action checks for exactly one primary modifier. Removed menuParams."
+      },
+      {
+        "path": "lib/redmine/wiki_toolbar.rb",
+        "summary": "Renders the format value, groups of buttons separated by spacers, apply, toggleMenu and help actions, the b/i/u shortcuts and the fixed keyboard actions. Precode menu items now use insertPrecode with a lang param. Removed SPACER, button_params and the per-key shortcut actions."
+      },
+      {
+        "path": "lib/redmine/wiki_formatting/common_mark/helper.rb",
+        "summary": "The toolbar now only defines format 'common_mark' and button_groups."
+      },
+      {
+        "path": "lib/redmine/wiki_formatting/textile/helper.rb",
+        "summary": "The toolbar now only defines format 'textile' and button_groups."
+      },
+      {
+        "path": "test/unit/lib/redmine/wiki_toolbar_test.rb",
+        "summary": "Tests for the format value, the button groups, the apply/menu/help actions, that no syntax params remain, the exact keyboard actions and shortcuts for both formats, and the precode lang params."
+      },
+      {
+        "path": "test/integration/layout_test.rb",
+        "summary": "Checks the precode lang params, the format value attribute, and that the importmap pins the wiki_formatting modules."
+      },
+      {
+        "path": "test/system/wiki_toolbar_test.rb",
+        "summary": "Added a browser test that clicks every apply button for CommonMark and Textile and checks the inserted text, and a Textile precode test."
+      }
+    ],
+    "acceptance": [
+      {
+        "criterion": "The toolbar renders with the new contract for CommonMark and Textile and works the same in the browser",
+        "met": true,
+        "evidence": "Unit tests check the format value, the groups and spacers, the apply/button params, the toggleMenu, insertPrecode/lang and help actions, that no prefix/suffix/strip/pattern/replacement/header-cell/separator-cell params remain, the 3 keyboard actions and the b/i/u shortcuts only. The system tests pass in a real browser (17 runs, 0 failures): every button's output for both formats, table and precode menus for both formats, keyboard shortcuts for both formats, preview, and closing the menus."
+      },
+      {
+        "criterion": "The change is covered by tests",
+        "met": true,
+        "evidence": "Updated and new tests in test/unit/lib/redmine/wiki_toolbar_test.rb, test/integration/layout_test.rb and test/system/wiki_toolbar_test.rb. All of them pass."
+      },
+      {
+        "criterion": "The existing test suite still passes",
+        "met": true,
+        "evidence": "bin/rails test: 6064 runs, 31684 assertions, 0 failures, 0 errors, 64 skips (Mercurial, Subversion and LDAP setups are not installed). The toolbar system tests pass (17 runs, 0 failures). The rest of the system test suite was not run."
+      }
+    ],
+    "human_needed": [],
+    "harness_used": [
+      "config/database.yml (written by a 'bin/harness setup') with prepared SQLite test databases",
+      "Homebrew Ruby 4 at /opt/homebrew/opt/ruby@4/bin with installed gems, used for bin/rails test and rubocop",
+      "Existing system tests (wiki_toolbar_test, keyboard_shortcuts_test) that run in a headless browser",
+      "The .rubocop.yml configuration"
+    ],
+    "harness_gaps": [
+      {
+        "file": null,
+        "problem": "Nothing says which Ruby to use. The system /usr/bin/ruby and bundle fail, and I had to find /opt/homebrew/opt/ruby@4/bin myself. A CLAUDE.md or .ruby-version would fix this."
+      },
+      {
+        "file": "config/database.yml",
+        "problem": "The file says it was written by 'bin/harness setup', but there is no bin/harness in the repository."
+      },
+      {
+        "file": null,
+        "problem": "There is no JavaScript linter or unit test setup (package.json only has stylelint). The JS can only be checked through the slow browser system tests or a node --check syntax check."
+      },
+      {
+        "file": null,
+        "problem": "The full suite takes about 2 minutes and the system suite is separate. There is no documented fast subset for toolbar changes."
+      }
+    ]
+  }
+}

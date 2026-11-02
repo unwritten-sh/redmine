@@ -1,0 +1,23 @@
+{
+  "task": "redmine-1",
+  "A": "harness",
+  "B": "control",
+  "answer": {
+    "A": {
+      "scope": 5,
+      "conventions": 4,
+      "tests": 4,
+      "readability": 4,
+      "notes": "Puts the per-format syntax in a `formats` table inside the controller file, built with small `wrap`/`wrapLines` helpers. The patterns are still regex strings, compiled with `new RegExp` as before. No importmap change is needed. Behaviour is kept, the Textile img `wrap('!')` included. Guard clauses handle unknown formats or buttons, and `shortcut` now ignores extra modifiers. Tests: the unit tests check the format value, button groups and spacers, the exact keyboard actions and shortcut mapping, and that no syntax parameters remain. System tests cover every button for both formats, Textile precode, heading stripping and a modifier-ignore shortcut test. They do not cover unbq or the prefix-conversion paths for lists."
+    },
+    "B": {
+      "scope": 4,
+      "conventions": 4,
+      "tests": 4,
+      "readability": 5,
+      "notes": "Splits the syntax into `wiki_formatting/common_mark.js` and `textile.js`, pinned through `pin_all_from` in the importmap. The options are documented in one place, and the patterns are real RegExp literals with the `(\\n|^)` group written in, so it is clear what each button does. `rendered_buttons` uses `safe_join` with a spacer separator, which is neat. `insertPrecode` and `insertTable` have no guard for an unknown format. It adds an importmap entry, which the change needs. Tests: generated system tests per format check that the set of apply buttons matches, and exercise conversions such as `- text` → `* text`, unbq, and heading-level replacement. A layout test checks that the importmap pins the format modules. The unit tests use `chunk` to check groups, plus a shared no-syntax assertion. No system test covers the new modifier-filtering shortcut logic."
+    },
+    "merge_first": "B",
+    "why": "Both changes follow the contract and keep the toolbar working the same. I'd merge B first because it puts each formatter's syntax in its own module and uses real RegExp literals, which is easier for a maintainer to read and extend. Its system tests also cover more of each button's behaviour (unbq, list conversion, heading replacement). A is a close second: it is simpler as one file, has safer guards, and adds a shortcut-modifier test."
+  }
+}

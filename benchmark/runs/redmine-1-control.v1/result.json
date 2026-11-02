@@ -1,0 +1,107 @@
+{
+  "task": "redmine-1",
+  "arm": "control",
+  "start": "668b525fbd93792d92c9f8797e2cc1be25162b07",
+  "seconds": 453,
+  "result": {
+    "status": "done",
+    "summary": "The change is done: the toolbar syntax now lives in the browser, and the server markup only lists the buttons and their groups. Each formatter has its own JavaScript file (app/javascript/wiki_formatting/common_mark.js and textile.js) that says what each button inserts. On the Ruby side, each formatter only gives `format_name` and `groups`. The root element now carries `data-wiki-toolbar-format-value`. Normal buttons use `wiki-toolbar#apply` with `data-wiki-toolbar-button-param`. The `table` and `precode` buttons still open their menus with `toggleMenu`, and each precode language item uses `wiki-toolbar#insertPrecode` with `data-wiki-toolbar-lang-param`. The root has exactly one generic `keydown->wiki-toolbar#shortcut` plus the two Ctrl/Cmd+Shift+P preview toggles. Only strong, em and ins have a `data-wiki-toolbar-shortcut` (b, i, u). The JavaScript shortcut handler now does the modifier check that Stimulus key filters did before: it requires Ctrl (Cmd on macOS) and rejects Shift, Alt and the other modifier. Tests: full non-system suite 6065 runs, 0 failures, 0 errors (64 skipped for missing SCM repos and LDAP); wiki toolbar and keyboard shortcut system tests 18 runs, 0 failures; RuboCop clean. Caveat: I wanted to run the new system tests once against the old code, to prove the expected text matches the old behavior, but that command was denied. The expected strings were copied by hand from the old Ruby button definitions.",
+    "changes": [
+      {
+        "path": "app/javascript/wiki_formatting/common_mark.js",
+        "summary": "New: CommonMark syntax for each button (wrap, wrapLines, table cells, precode prefix/suffix)."
+      },
+      {
+        "path": "app/javascript/wiki_formatting/textile.js",
+        "summary": "New: Textile syntax for each button."
+      },
+      {
+        "path": "app/javascript/wiki_formatting/index.js",
+        "summary": "New: maps format names (common_mark, textile) to their syntax and documents the structure. Plugins can register other formats here."
+      },
+      {
+        "path": "config/importmap.rb",
+        "summary": "Pin app/javascript/wiki_formatting under 'wiki_formatting'."
+      },
+      {
+        "path": "app/javascript/controllers/wiki_toolbar_controller.js",
+        "summary": "Adds the format value and the apply and insertPrecode actions. insertTable reads the syntax from JS. wrap and wrapLines are now private helpers. The generic shortcut handler checks modifiers itself (Ctrl or Cmd only, no Shift or Alt) and escapes the key."
+      },
+      {
+        "path": "lib/redmine/wiki_toolbar.rb",
+        "summary": "Renders from format_name and groups. Adds MENUS, SHORTCUTS and fixed KEYBOARD_ACTIONS. Buttons no longer render syntax params. The precode menu renders lang params."
+      },
+      {
+        "path": "lib/redmine/wiki_formatting/common_mark/helper.rb",
+        "summary": "Toolbar now only declares format_name 'common_mark' and its button groups."
+      },
+      {
+        "path": "lib/redmine/wiki_formatting/textile/helper.rb",
+        "summary": "Toolbar now only declares format_name 'textile' and its button groups."
+      },
+      {
+        "path": "test/unit/lib/redmine/wiki_toolbar_test.rb",
+        "summary": "Tests the new contract: format value, button order and spacers, apply/button params, no syntax params, the exact keyboard actions, shortcuts only on strong/em/ins, and precode lang params."
+      },
+      {
+        "path": "test/integration/layout_test.rb",
+        "summary": "Precode menu assertion now checks for the lang param."
+      },
+      {
+        "path": "test/system/wiki_toolbar_test.rb",
+        "summary": "New browser tests: the text every button inserts for CommonMark and Textile, heading replacement, unquote, Textile precode, and the shortcut ignoring extra modifiers."
+      }
+    ],
+    "acceptance": [
+      {
+        "criterion": "Toolbar renders with the new contract for CommonMark and Textile",
+        "met": true,
+        "evidence": "test/unit/lib/redmine/wiki_toolbar_test.rb checks format value, apply/button params, toggleMenu/menu params, insertPrecode/lang params, help action, no prefix/suffix/strip/pattern/replacement/header-cell/separator-cell params, exactly 3 keyboard actions, and shortcuts only on b/i/u for both formatters; all pass."
+      },
+      {
+        "criterion": "Works the same in the browser (same buttons, text, shortcuts, menus)",
+        "met": true,
+        "evidence": "bin/rails test test/system/wiki_toolbar_test.rb test/system/keyboard_shortcuts_test.rb (headless Chrome): 18 runs, 109 assertions, 0 failures. The existing tests for tables, precode, menus, shortcuts and preview still pass, and the new tests cover every button for both formatters. I could not run the new tests against the old code (command denied), so the expected strings rest on the old Ruby definitions."
+      },
+      {
+        "criterion": "Change is covered by tests",
+        "met": true,
+        "evidence": "Unit, integration and system tests updated or added as listed in changes."
+      },
+      {
+        "criterion": "Existing test suite still passes",
+        "met": true,
+        "evidence": "bin/rails test: 6065 runs, 31679 assertions, 0 failures, 0 errors, 64 skips (SCM repos and LDAP not present). RuboCop: no offenses on changed Ruby files."
+      }
+    ],
+    "human_needed": [],
+    "harness_used": [
+      ".claude/skills/implement-change (workflow: find code, test first, run gates)",
+      ".claude/skills/frontend-stimulus (importmap/no-build rules, system test command with GOOGLE_CHROME_OPTS_ARGS=headless)",
+      "config/database.yml already set up for SQLite",
+      "Existing unit/system tests for the toolbar as a behavior reference"
+    ],
+    "harness_gaps": [
+      {
+        "file": "bin/harness",
+        "problem": "Both skills tell you to use bin/harness (setup, check-fast, check, lint), but the script does not exist in this tree. I ran rubocop and bin/rails test directly instead."
+      },
+      {
+        "file": null,
+        "problem": "Running `ruby` and `bundle` by default uses macOS system Ruby 2.6, which fails on the Gemfile.lock bundler version. I had to find /opt/homebrew/opt/ruby/bin myself. There is no .ruby-version file and no note on which Ruby to use."
+      },
+      {
+        "file": "docs/",
+        "problem": "The skills refer to docs/product.md, docs/architecture.md, docs/agreements/working-agreements.md, docs/decisions/0003-... and docs/harness/log.md, but there is no docs/ folder in this tree. No log entry was written."
+      },
+      {
+        "file": "app/javascript/wiki_formatting/",
+        "problem": "The frontend-stimulus skill names this folder as an existing JS location, but it did not exist and was not pinned in importmap. I created it and pinned it."
+      },
+      {
+        "file": "bin/importmap",
+        "problem": "Not executable (permission denied). I checked the pins with bin/rails runner instead."
+      }
+    ]
+  }
+}

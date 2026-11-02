@@ -1,0 +1,23 @@
+{
+  "task": "redmine-2",
+  "A": "control",
+  "B": "harness",
+  "answer": {
+    "A": {
+      "scope": 5,
+      "conventions": 4,
+      "tests": 5,
+      "readability": 5,
+      "notes": "Production code is tight. `filter_warnings` sits next to the filter validation code, and the operator/type lists are local, which is easy to follow. It uses `filter_map`, Redmine's `l()` helper for the words connector, and a `%{max}` placeholder, which matches how other locale keys name their placeholders. The Tokenizer refactor keeps the original comments and memoizes the full token list. Tests are thorough. Each controller test checks the exact message, that HTML is escaped (`p.warning b` count 0) and that results still render. Unit tests cover all five operators, a non-splitting operator, a non-text filter (issue_id), any_searchable and the no-truncation case. Tests are placed beside related existing tests. Small nit: the `:f/:op/:v` params in the functional tests have an odd extra indent."
+    },
+    "B": {
+      "scope": 5,
+      "conventions": 3,
+      "tests": 4,
+      "readability": 4,
+      "notes": "Functionally almost the same as A. It uses `value_for(field)`, which is fine. Smaller convention issues: a `TOKENIZED_OPERATORS` constant is declared in the middle of the class between instance methods. It calls `::I18n.t` directly instead of Redmine's `l` helper. The `%{count}` placeholder means something special to I18n (pluralization) and could confuse translators. It also uses a manual accumulator where `filter_map` would read better. Tests are good but weaker: the calendar and Gantt tests only regex-match part of the message and don't check escaping. There is no test that non-text filters are ignored. Every unit test sets `User.current` without needing to. All tests are appended at the end of the files instead of next to related tests."
+    },
+    "merge_first": "A",
+    "why": "The two changes are nearly identical in behavior. A follows Redmine's conventions more closely: it uses the `l()` helper, has no constant in the middle of the class, and uses a plain `%{max}` placeholder instead of `%{count}`. A's tests are also stronger: exact messages and escaping are checked in all three views, and non-text filters have a test."
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "task": "redmine-1",
+  "arm": "control",
+  "applied": true,
+  "apply_error": "",
+  "hidden": {
+    "code": 0,
+    "tests": {
+      "ran": 18,
+      "skipped": 0,
+      "failed": 0
+    },
+    "seconds": 2,
+    "tail": ""
+  },
+  "full": {
+    "code": 1,
+    "tests": {
+      "ran": 6064,
+      "skipped": 64,
+      "failed": 5
+    },
+    "seconds": 50,
+    "tail": "............................................................................................................................................................S...........S..S..........................S..................S....................S...........SSS.......S.........................................................................................................\n\nFinished in 38.983470s, 155.5531 runs/s, 810.4717 assertions/s.\n6064 runs, 31595 assertions, 5 failures, 0 errors, 64 skips\n\nYou have skipped tests. Run with --verbose for details.\nrake aborted!\nCommand failed with status (1): [RAILS_ENV=test PARALLEL_WORKERS=14 /opt/homebrew/opt/ruby/bin/ruby bin/rails test]\n/Users/victor/Repos/unwritten/uw-harness-cases/redmine/bench/trees/redmine-1-grade-control/Rakefile:83:in 'block in <top (required)>'\n/opt/homebrew/lib/ruby/gems/4.0.0/gems/rake-13.4.2/exe/rake:27:in '<top (required)>'\n/opt/homebrew/lib/ruby/gems/4.0.0/gems/bundler-4.0.6/lib/bundler/cli/exec.rb:61:in 'Kernel.load'\n/opt/homebrew/lib/ruby/gems/4.0.0/gems/bundler-4.0.6/lib/bundler/cli/exec.rb:61:in 'Bundler::CLI::Exec#kernel_load'\n/opt/homebrew/lib/ruby/gems/4.0.0/gems/bundler-4.0.6/lib/bundler/cli/exec.rb:24:in 'Bundler::CLI::Exec#run'\n/opt/homebrew/lib/ruby/gems/4.0.0/gems/bundler-4.0.6/lib/bundler/cli.rb:500:in 'Bundler::CLI#exec'\n/opt/homebrew/lib/ruby/gems/4.0.0/gems/bundler-4.0.6/lib/bundler/vendor/thor/lib/thor/command.rb:28:in 'Bundler::Thor::Command#run'\n/opt/homebrew/lib/ruby/gems/4.0.0/gems/bundler-4.0.6/lib/bundler/vendor/thor/lib/thor/invocation.rb:127:in 'Bundler::Thor::Invocation#invoke_command'\n/opt/homebrew/lib/ruby/gems/4.0.0/gems/bundler-4.0.6/lib/bundler/vendor/thor/lib/thor.rb:538:in 'Bundler::Thor.dispatch'\n/opt/homebrew/lib/ruby/gems/4.0.0/gems/bundler-4.0.6/lib/bundler/cli.rb:35:in 'Bundler::CLI.dispatch'\n/opt/homebrew/lib/ruby/gems/4.0.0/gems/bundler-4.0.6/lib/bundler/vendor/thor/lib/thor/base.rb:584:in 'Bundler::Thor::Base::ClassMethods#start'\n/opt/homebrew/lib/ruby/gems/4.0.0/gems/bundler-4.0.6/lib/bundler/cli.rb:29:in 'Bundler::CLI.start'\n/opt/homebrew/lib/ruby/gems/4.0.0/gems/bundler-4.0.6/exe/bundle:28:in 'block in <top (required)>'\n/opt/homebrew/lib/ruby/gems/4.0.0/gems/bundler-4.0.6/lib/bundler/friendly_errors.rb:118:in 'Bundler.with_friendly_errors'\n/opt/homebrew/lib/ruby/gems/4.0.0/gems/bundler-4.0.6/exe/bundle:20:in '<top (required)>'\n/opt/homebrew/lib/ruby/gems/4.0.0/bin/bundle:25:in '<main>'\nTasks: TOP => check\n(See full trace by running task with --trace)\n"
+  },
+  "reference": {
+    "code": 0,
+    "tests": {
+      "ran": 6065,
+      "skipped": 64,
+      "failed": 0
+    }
+  },
+  "solved": false
+}

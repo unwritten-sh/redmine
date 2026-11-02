@@ -1,0 +1,35 @@
+{
+  "task": "redmine-2",
+  "arm": "control",
+  "applied": true,
+  "apply_error": "",
+  "hidden": {
+    "code": 0,
+    "tests": {
+      "ran": 784,
+      "skipped": 4,
+      "failed": 0
+    },
+    "seconds": 29,
+    "tail": ""
+  },
+  "full": {
+    "code": 0,
+    "tests": {
+      "ran": 6067,
+      "skipped": 64,
+      "failed": 0
+    },
+    "seconds": 44,
+    "tail": ""
+  },
+  "reference": {
+    "code": 0,
+    "tests": {
+      "ran": 6061,
+      "skipped": 64,
+      "failed": 0
+    }
+  },
+  "solved": true
+}

@@ -1,0 +1,23 @@
+{
+  "task": "redmine-3",
+  "A": "control",
+  "B": "harness",
+  "answer": {
+    "A": {
+      "scope": 5,
+      "conventions": 4,
+      "tests": 5,
+      "readability": 4,
+      "notes": "Wraps the output of a macro without `:sections` in HTML-comment markers when that output contains a heading. `parse_sections` tracks marker depth and skips numbering headings between markers. A `@macro_depth` counter keeps the markers through nested `textilizable` calls (for example, `include` inside `collapse`) and removes them only at the outermost level. This handles nested macros correctly. Tests cover a plain include, an include nested in `collapse`, custom macros with and without `:sections`, alignment with `get_section`, and the `macro_sections?` helper. Drawbacks: the combined `SECTION_HEADING_RE` shifts the capture groups, and the `@macro_depth` state adds some complexity, though both are commented."
+    },
+    "B": {
+      "scope": 5,
+      "conventions": 4,
+      "tests": 4,
+      "readability": 4,
+      "notes": "Replaces the output of a macro without `:sections` with a random placeholder comment and puts the output back after `parse_sections` numbers the headings. The idea is simple. However, it only hides output when the current `textilizable` call has `edit_section_links`. When `include` sits inside a `collapse` block, the inner `textilizable` call made by `collapse` has no `edit_section_links`, so the included headings are not hidden. The outer `parse_sections` then counts them and the section numbers shift again. The state also lives in an instance hash shared across calls. The test is good for the flat case: it checks section numbers against `get_section`, including headings inside `collapse`. It does not cover the nested case, which is exactly where the bug is. It adds a test that an invalid macro option raises an error."
+    },
+    "merge_first": "A",
+    "why": "A handles `include` nested inside `collapse` correctly and tests it. B misses that case: the inner `textilizable` call has no `edit_section_links`, so the included headings are counted again and the section numbers shift. Both changes have similar scope and clarity."
+  }
+}

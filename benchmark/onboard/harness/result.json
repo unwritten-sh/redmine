@@ -1,0 +1,19 @@
+{
+  "arm": "harness",
+  "seconds": 2735,
+  "result": {
+    "status": "done",
+    "test_command": "bin/harness test",
+    "setup_steps": [
+      "Read AGENTS.md/CLAUDE.md, docs/local-dev.md and bin/harness. Checked the tools: /usr/bin/ruby is 2.6, Homebrew Ruby 4.0.0 is at /opt/homebrew/opt/ruby/bin (bin/harness picks it automatically). Node, yarn, sqlite3 and svnadmin are installed. hg is not installed, so the Mercurial tests skip.",
+      "Ran `bin/harness setup`. It wrote config/database.yml (SQLite3, git-ignored), ran bundle install (this resolved a new, git-ignored Gemfile.lock) and yarn install (Stylelint), created and migrated the development and test SQLite3 databases with the default data, unpacked the SCM test repositories into tmp/test, and set `git config core.hooksPath .githooks`. The suite needs no running service because SQLite3 is file-based.",
+      "Ran `bin/harness test` (the same as bin/rails test: all tests except system tests) and saved the log to /tmp/redmine_test.log.",
+      "Looked into the failures with scratch scripts in /tmp/rmdbg. I tried pinning older Nokogiri versions in the local Gemfile.lock, then put back the lockfile exactly as bundle install resolved it. I installed extra nokogiri 1.19.1–1.19.5 gems into the Homebrew Ruby gem directory; they are not used by the bundle. No repository file, product code or test was changed, and nothing was committed."
+    ],
+    "summary": "The environment works: Homebrew Ruby 4.0.0, SQLite3, gems and Node packages are installed, and the databases and SVN/git test repositories are ready. `bin/harness test` runs 6296 tests in about 200 s: 8 failures, 0 errors, 131 skips. The skips are SCM, LDAP and similar tests that need missing binaries such as hg. The 8 failures are not caused by this machine. They come from dependency drift, because Gemfile.lock is git-ignored and bundle install picks the newest allowed versions. (1) 7 tests fail: ThemesTest x3, LayoutTest#test_wiki_formatter_header_tags, and 3 IssuesControllerTest tests that check icon or asset hrefs. They use `assert_select \\\"...:match('href', ?)\\\", /regex/`. rails-dom-testing passes the regex to Nokogiri as a quoted CSS string. Since Nokogiri 1.19.5, Nokogiri unescapes backslashes in CSS strings (`\\\\w` becomes `w`), so the regex never matches. I checked this directly: 1.19.1–1.19.4 match and 1.19.5/1.19.6 do not. The rendered HTML is correct (for example /assets/jstoolbar-5ea6dfba.css). Pinning Nokogiri 1.19.4 locally is not possible without also downgrading rails-html-sanitizer 1.7.2 and loofah 2.25.3, which need Nokogiri >= 1.19.5 and appear to be security releases, so I left them as resolved. (2) Redmine::WikiFormatting::CommonMark::SanitizationFilterTest#test_should_sanitize_html_strings fails. The sanitizer now escapes `>` and `<` inside an attribute value as `&gt;` and `&lt;`, which also points to the newer Nokogiri/libxml2/loofah versions. docs/harness/log.md records 0 failures with the older lock. Setup also set the local git config core.hooksPath to .githooks, as the documentation says it should.",
+    "human_needed": [
+      "Gemfile.lock is git-ignored, so each new clone gets the newest gems. With nokogiri 1.19.6, loofah 2.25.3 and rails-html-sanitizer 1.7.2, 8 tests fail (assert_select :match with a regex, and one CommonMark sanitization test). Should the tests be updated upstream (for example, pass the regex in a form that survives Nokogiri's CSS unescaping, and accept the new attribute escaping), or should the project pin Nokogiri < 1.19.5 and accept older loofah and rails-html-sanitizer versions?",
+      "Is it acceptable that the suite skips the Mercurial tests (hg is not installed here) and the system tests (Chrome)?"
+    ]
+  }
+}

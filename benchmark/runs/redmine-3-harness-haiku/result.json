@@ -1,0 +1,83 @@
+{
+  "task": "redmine-3",
+  "arm": "harness-haiku",
+  "start": "5967acd61204b57fa02bb856e10eda3c77e23e11",
+  "seconds": 359,
+  "result": {
+    "status": "done",
+    "summary": "Headings from macro output (such as {{include(Page)}}) no longer get section edit links or count as sections. Macros declare `:sections => true` at definition; only `collapse` does. Other macro output is wrapped in internal markers during rendering, and `parse_sections` skips the headings between them. Nested macros (an include inside a collapse) are handled by tracking macro depth, so the markers are only removed at the outermost call. Included headings are still rendered normally. check-fast and the full non-system gate both pass. Nothing was committed or pushed.",
+    "changes": [
+      {
+        "path": "app/helpers/application_helper.rb",
+        "summary": "Adds NO_SECTION markers and SECTION_TAG_RE; parse_sections skips headings inside non-section macro output and removes markers; inject_macros wraps output of macros without :sections => true; textilizable strips markers at the outermost call (@macro_depth == 0)."
+      },
+      {
+        "path": "lib/redmine/wiki_formatting/macros.rb",
+        "summary": "macro accepts :sections option (assert_valid_keys); collapse declared with :sections => true; exec_macro tracks @macro_depth around macro execution; documented the option."
+      },
+      {
+        "path": "test/helpers/application_helper_test.rb",
+        "summary": "Three new tests: included page headings get no edit link and local numbering is right; include nested in collapse is skipped; macro with and without :sections => true."
+      },
+      {
+        "path": "docs/harness/log.md",
+        "summary": "Dated 2026-11-02 entry: what changed, what was learned, what is left."
+      }
+    ],
+    "acceptance": [
+      {
+        "criterion": "On a page with local headings and an included page, only the local headings get edit links, and their section numbers match the numbers used when editing the page",
+        "met": true,
+        "evidence": "test_section_edit_links_should_skip_headings_from_included_page (textile page: h1 Wiki, {{include(Child_1)}}, h2 Local section): edit links are exactly section=2 and id=section-2 only; before the fix the local heading was section=3. Numbering matches extract_sections on raw text, where the include line is not a heading. I did not run an end-to-end edit form submit."
+      },
+      {
+        "criterion": "Headings in collapse output keep their edit links",
+        "met": true,
+        "evidence": "Existing test_section_edit_links_with_collapse_macro passes unchanged (Section B gets section=3, Section C section=4)."
+      },
+      {
+        "criterion": "Macros without :sections => true are treated like include; included headings are still rendered normally",
+        "met": true,
+        "evidence": "test_section_edit_links_should_depend_on_sections_option_of_macro: plain macro heading gets no link, sections macro heading gets section=2, local heading section=3; test_section_edit_links_should_skip_headings_from_include_nested_in_collapse checks 'Child page 1' is still rendered. The nested test fails if the depth guard is removed (verified by temporary edit, then restored)."
+      },
+      {
+        "criterion": "The change is covered by tests",
+        "met": true,
+        "evidence": "Three new tests in test/helpers/application_helper_test.rb, all passing (6 section_edit_links runs, 25 assertions)."
+      },
+      {
+        "criterion": "The existing test suite still passes",
+        "met": true,
+        "evidence": "bin/harness check-fast: 1099 files no offenses, 3384 runs, 0 failures, 0 errors. bin/harness check: 6297 runs, 33002 assertions, 0 failures, 0 errors, 131 skips (same skip count as before per log). System tests were not run (need Chrome)."
+      }
+    ],
+    "human_needed": [
+      {
+        "question": "Should headings from included pages still get anchors (id and para link) and appear in the table of contents? The code still does this as before, and the spec only asked for edit links and numbering to change.",
+        "why": "The issue does not say whether TOC entries from included pages are wanted. Changing it affects existing TOC behavior (there is a test that expects included headings in the TOC)."
+      }
+    ],
+    "harness_used": [
+      "AGENTS.md (CLAUDE.md symlink): commands, conventions, verification steps, never-do list",
+      "implement-change skill: setup, test-first, check-fast, check, log entry steps",
+      "bin/harness setup, check-fast, check",
+      "docs/harness/log.md: format for the dated entry",
+      "Rakefile harness tasks",
+      "Existing tests in test/helpers/application_helper_test.rb for section edit links, which showed the expected HTML format"
+    ],
+    "harness_gaps": [
+      {
+        "file": "AGENTS.md / docs/local-dev.md",
+        "problem": "Running `bin/rails test ...` directly picks the macOS system Ruby 2.6 and fails with a Bundler lockfile error. Only `bin/harness` falls back to the Homebrew Ruby. The docs do not say that single-file tests should be run with the Homebrew Ruby on PATH."
+      },
+      {
+        "file": ".agents/skills/implement-change/SKILL.md",
+        "problem": "The skill tells you to run `bin/rails test test/unit/issue_test.rb -n test_create`, but Minitest on this Ruby 4 setup warns to use -i/--include. Not a failure, but noisy."
+      },
+      {
+        "file": "test/fixtures/wiki_contents.yml",
+        "problem": "The Child_1 fixture is textile. The tests must use textile when they include it, which is not documented near the fixture or in the test helpers."
+      }
+    ]
+  }
+}
